@@ -3974,7 +3974,7 @@ void Player::RemoveSpellCategoryCooldown(uint32 cat, bool update /* = false */)
 
 void Player::RemoveArenaSpellCooldowns(bool removeActivePetCooldowns)
 {
-    // remove cooldowns on spells that have <= 10 min CD
+    // remove cooldowns on spells that have < 10 min CD
 
     SpellCooldowns::iterator itr, next;
     for (itr = m_spellCooldowns.begin(); itr != m_spellCooldowns.end(); itr = next)
@@ -3982,10 +3982,10 @@ void Player::RemoveArenaSpellCooldowns(bool removeActivePetCooldowns)
         next = itr;
         ++next;
         SpellInfo const* entry = sSpellMgr->GetSpellInfo(itr->first);
-        // check if spellentry is present and if the cooldown is less or equal to 10 min
+        // check if spellentry is present and if the cooldown is less than 10 min
         if (entry &&
-            entry->RecoveryTime <= 10 * MINUTE * IN_MILLISECONDS &&
-            entry->CategoryRecoveryTime <= 10 * MINUTE * IN_MILLISECONDS)
+            entry->RecoveryTime < 10 * MINUTE * IN_MILLISECONDS &&
+            entry->CategoryRecoveryTime < 10 * MINUTE * IN_MILLISECONDS)
         {
             // remove & notify
             RemoveSpellCooldown(itr->first, true);
@@ -8316,7 +8316,7 @@ void Player::CastItemCombatSpell(Unit* target, WeaponAttackType attType, uint32 
     }
 }
 
-void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8 cast_count, uint32 glyphIndex)
+void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8 castCount, uint32 misc)
 {
     ItemTemplate const* proto = item->GetTemplate();
     // special learning case
@@ -8337,7 +8337,7 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
 
             Spell* spell = new Spell(this, spellInfo, TRIGGERED_NONE);
             spell->m_CastItem = item;
-            spell->m_cast_count = cast_count;                   //set count of casts
+            spell->m_cast_count = castCount; //set count of casts
             spell->SetSpellValue(SPELLVALUE_BASE_POINT0, learning_spell_id);
             spell->prepare(&targets);
             return;
@@ -8365,8 +8365,8 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
 
         Spell* spell = new Spell(this, spellInfo, (count > 0) ? TRIGGERED_FULL_MASK : TRIGGERED_NONE);
         spell->m_CastItem = item;
-        spell->m_cast_count = cast_count;                   // set count of casts
-        spell->m_misc.Data = glyphIndex;                    // glyph index
+        spell->m_cast_count = castCount;                   // set count of casts
+        spell->m_misc.Data = misc;
         spell->prepare(&targets);
 
         ++count;
@@ -8393,8 +8393,8 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
 
             Spell* spell = new Spell(this, spellInfo, (count > 0) ? TRIGGERED_FULL_MASK : TRIGGERED_NONE);
             spell->m_CastItem = item;
-            spell->m_cast_count = cast_count;               // set count of casts
-            spell->m_misc.Data = glyphIndex;                // glyph index
+            spell->m_cast_count = castCount;                // set count of casts
+            spell->m_misc.Data = misc;                     // glyph index
             spell->prepare(&targets);
 
             ++count;
@@ -9566,9 +9566,8 @@ uint32 Player::GetXPRestBonus(uint32 xp)
 
 void Player::SetBindPoint(ObjectGuid guid)
 {
-    WorldPacket data(SMSG_BINDER_CONFIRM, 8);
-    data << guid;
-    GetSession()->SendPacket(&data);
+    WorldPackets::Misc::BinderConfirm packet(guid);
+    GetSession()->SendPacket(packet.Write());
 }
 
 void Player::SendRespecWipeConfirm(ObjectGuid const& guid, uint32 cost)
@@ -22059,10 +22058,34 @@ void Player::SendCooldownEvent(SpellInfo const* spellInfo, uint32 itemId /*= 0*/
         AddSpellAndCategoryCooldowns(spellInfo, itemId, spell);
 
     // Send activate cooldown timer (possible 0) at client side
-    WorldPacket data(SMSG_COOLDOWN_EVENT, 4 + 8);
-    data << uint32(spellInfo->Id);
-    data << GetGUID();
-    SendDirectMessage(&data);
+    WorldPackets::Spells::CooldownEvent packet(GetGUID(), spellInfo->Id);
+    SendDirectMessage(packet.Write());
+
+    uint32 cat = spellInfo->GetCategory();
+    if (cat && spellInfo->CategoryRecoveryTime)
+    {
+        SpellCategoryStore::const_iterator ct = sSpellsByCategoryStore.find(cat);
+        if (ct != sSpellsByCategoryStore.end())
+        {
+            SpellCategorySet const& catSet = ct->second;
+            for (SpellCooldowns::const_iterator i = m_spellCooldowns.begin(); i != m_spellCooldowns.end(); ++i)
+            {
+                if (i->first == spellInfo->Id) // skip main spell, already handled above
+                    continue;
+
+                SpellInfo const* spellInfo2 = sSpellMgr->GetSpellInfo(i->first);
+                if (!spellInfo2 || !spellInfo2->IsCooldownStartedOnEvent())
+                    continue;
+
+                if (catSet.find(i->first) != catSet.end())
+                {
+                    // Send activate cooldown timer (possible 0) at client side
+                    WorldPackets::Spells::CooldownEvent packet(GetGUID(), i->first);
+                    SendDirectMessage(packet.Write());
+                }
+            }
+        }
+    }
 }
 
 void Player::UpdatePotionCooldown(Spell* spell)

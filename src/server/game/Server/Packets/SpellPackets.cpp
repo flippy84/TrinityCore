@@ -223,6 +223,15 @@ void WorldPackets::Spells::PetCastSpell::Read()
     _worldPacket >> Cast;
 }
 
+
+void WorldPackets::Spells::UseItem::Read()
+{
+    _worldPacket >> PackSlot;
+    _worldPacket >> Slot;
+    _worldPacket >> CastItem;
+    _worldPacket >> Cast;
+}
+
 ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Spells::TargetLocation const& targetLocation)
 {
     data << targetLocation.Transport;
@@ -467,6 +476,14 @@ WorldPacket const* WorldPackets::Spells::UnlearnedSpells::Write()
     _worldPacket << uint32(SpellID.size());
     for (uint32 spellId : SpellID)
         _worldPacket << uint32(spellId);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Spells::CooldownEvent::Write()
+{
+    _worldPacket << CasterGUID;
+    _worldPacket << int32(SpellID);
 
     return &_worldPacket;
 }
