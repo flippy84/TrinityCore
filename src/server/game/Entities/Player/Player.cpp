@@ -4389,7 +4389,7 @@ void Player::DeleteFromDB(ObjectGuid playerguid, uint32 accountId, bool updateRe
             RemoveFromGroup(group, playerguid);
 
     // Remove signs from petitions (also remove petitions if owner);
-    RemovePetitionsAndSigns(playerguid, 10);
+    RemovePetitionsAndSigns(playerguid);
 
     switch (charDeleteMethod)
     {
@@ -7287,7 +7287,7 @@ void Player::SetInGuild(ObjectGuid::LowType guildId)
     else
         SetGuidValue(OBJECT_FIELD_DATA, ObjectGuid::Empty);
 
-    ApplyModFlag(PLAYER_FLAGS, PLAYER_FLAGS_GUILD_LEVEL_ENABLED, guildId != 0 && sWorld->getBoolConfig(CONFIG_GUILD_LEVELING_ENABLED));
+    ApplyModFlag(PLAYER_FLAGS, PLAYER_FLAGS_GUILD_LEVEL_ENABLED, guildId != 0);
     SetUInt16Value(OBJECT_FIELD_TYPE, 1, guildId != 0);
 }
 
@@ -12997,12 +12997,11 @@ void Player::SendEquipError(InventoryResult msg, Item* item1 /*= nullptr*/, Item
 
 void Player::SendBuyError(BuyResult msg, Creature* creature, uint32 item, uint32 /*param*/)
 {
-    TC_LOG_DEBUG("network", "WORLD: Sent SMSG_BUY_FAILED");
-    WorldPacket data(SMSG_BUY_FAILED, (8+4+4+1));
-    data << (creature ? creature->GetGUID() : ObjectGuid::Empty);
-    data << uint32(item);
-    data << uint8(msg);
-    GetSession()->SendPacket(&data);
+    WorldPackets::Item::BuyFailed packet;
+    packet.VendorGUID = creature ? creature->GetGUID() : ObjectGuid::Empty;
+    packet.Muid = item;
+    packet.Reason = msg;
+    GetSession()->SendPacket(packet.Write());
 }
 
 void Player::SendSellError(SellResult msg, Creature* creature, ObjectGuid guid)
@@ -14748,9 +14747,6 @@ void Player::RewardQuest(Quest const* quest, uint32 reward, Object* questGiver, 
         GiveXP(XP, NULL);
     else
         moneyRew = int32(quest->GetRewMoneyMaxLevel() * sWorld->getRate(RATE_DROP_MONEY));
-
-    if (Guild* guild = sGuildMgr->GetGuildById(GetGuildId()))
-        guild->GiveXP(uint32(quest->XPValue(getLevel()) * sWorld->getRate(RATE_XP_QUEST) * sWorld->getRate(RATE_XP_GUILD_MODIFIER)), this);
 
     moneyRew += quest->GetRewMoney();
 
@@ -20816,18 +20812,9 @@ void Player::SendProficiency(ItemClass itemClass, uint32 itemSubclassMask)
     SendDirectMessage(packet.Write());
 }
 
-void Player::RemovePetitionsAndSigns(ObjectGuid guid, uint32 type)
+void Player::RemovePetitionsAndSigns(ObjectGuid guid)
 {
-    PreparedStatement* stmt;
-
-    if (type == 10)
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PETITION_SIG_BY_GUID);
-    else
-    {
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PETITION_SIG_BY_GUID_TYPE);
-        stmt->setUInt8(1, uint8(type));
-    }
-
+    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PETITION_SIG_BY_GUID);
     stmt->setUInt64(0, guid.GetCounter());
     PreparedQueryResult result = CharacterDatabase.Query(stmt);
 
@@ -20845,48 +20832,23 @@ void Player::RemovePetitionsAndSigns(ObjectGuid guid, uint32 type)
                 owner->GetSession()->SendPetitionQueryOpcode(petitionguid);
         } while (result->NextRow());
 
-        if (type == 10)
-        {
-            stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ALL_PETITION_SIGNATURES);
+        stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_ALL_PETITION_SIGNATURES);
 
-            stmt->setUInt64(0, guid.GetCounter());
+        stmt->setUInt64(0, guid.GetCounter());
 
-            CharacterDatabase.Execute(stmt);
-        }
-        else
-        {
-            stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_SIGNATURE);
-
-            stmt->setUInt64(0, guid.GetCounter());
-            stmt->setUInt8(1, uint8(type));
-
-            CharacterDatabase.Execute(stmt);
-        }
+        CharacterDatabase.Execute(stmt);
     }
 
     SQLTransaction trans = CharacterDatabase.BeginTransaction();
-    if (type == 10)
-    {
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_BY_OWNER);
-        stmt->setUInt64(0, guid.GetCounter());
-        trans->Append(stmt);
 
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_SIGNATURE_BY_OWNER);
-        stmt->setUInt64(0, guid.GetCounter());
-        trans->Append(stmt);
-    }
-    else
-    {
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_BY_OWNER_AND_TYPE);
-        stmt->setUInt64(0, guid.GetCounter());
-        stmt->setUInt8(1, uint8(type));
-        trans->Append(stmt);
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_BY_OWNER);
+    stmt->setUInt64(0, guid.GetCounter());
+    trans->Append(stmt);
 
-        stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_SIGNATURE_BY_OWNER_AND_TYPE);
-        stmt->setUInt64(0, guid.GetCounter());
-        stmt->setUInt8(1, uint8(type));
-        trans->Append(stmt);
-    }
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_PETITION_SIGNATURE_BY_OWNER);
+    stmt->setUInt64(0, guid.GetCounter());
+    trans->Append(stmt);
+
     CharacterDatabase.CommitTransaction(trans);
 }
 
@@ -21358,12 +21320,13 @@ inline bool Player::_StoreOrEquipNewItem(uint32 vendorslot, uint32 item, uint8 c
     {
         uint32 new_count = pVendor->UpdateVendorItemCurrentCount(crItem, count);
 
-        WorldPacket data(SMSG_BUY_ITEM, (8+4+4+4));
-        data << pVendor->GetGUID();
-        data << uint32(vendorslot + 1);                   // numbered from 1 at client
-        data << int32(crItem->maxcount > 0 ? new_count : 0xFFFFFFFF);
-        data << uint32(count);
-        GetSession()->SendPacket(&data);
+        WorldPackets::Item::BuySucceeded packet;
+        packet.VendorGUID = pVendor->GetGUID();
+        packet.Muid = vendorslot + 1;
+        packet.NewQuantity = crItem->maxcount > 0 ? new_count : 0xFFFFFFFF;
+        packet.QuantityBought = count;
+        GetSession()->SendPacket(packet.Write());
+
         SendNewItem(it, count, true, false, false);
 
         if (!bStore)
