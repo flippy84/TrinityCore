@@ -98,7 +98,7 @@ void WorldSession::HandleUseItemOpcode(WorldPackets::Spells::UseItem& packet)
     {
         for (uint32 i = 0; i < proto->Effects.size(); ++i)
         {
-            if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(proto->Effects[i].SpellID))
+            if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(proto->Effects[i]->SpellID))
             {
                 if (!spellInfo->CanBeUsedInCombat())
                 {
@@ -418,8 +418,6 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPacket& recvPacket)
     }
 
     pet->RemoveOwnedAura(spellId, ObjectGuid::Empty, 0, AURA_REMOVE_BY_CANCEL);
-
-    pet->AddCreatureSpellCooldown(spellId);
 }
 
 void WorldSession::HandleCancelGrowthAuraOpcode(WorldPacket& /*recvPacket*/) { }

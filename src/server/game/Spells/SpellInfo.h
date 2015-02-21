@@ -399,6 +399,7 @@ public:
     uint32 PreventionType;
     int32  RequiredAreasID;
     uint32 SchoolMask;
+    SpellCategoryEntry const* ChargeCategoryEntry;
     uint32 SpellDifficultyId;
     uint32 SpellScalingId;
     uint32 SpellAuraOptionsId;
@@ -449,7 +450,7 @@ public:
     SpellTotemsEntry const* GetSpellTotems() const;
     SpellMiscEntry const* GetSpellMisc() const;
 
-    SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap effects);
+    SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap const& effectsMap);
     ~SpellInfo();
 
     uint32 GetCategory() const;
@@ -571,6 +572,7 @@ public:
 
     // unloading helpers
     void _UnloadImplicitTargetConditionLists();
+    void _UnloadSpellEffects();
 
     SpellEffectInfoVector GetEffectsForDifficulty(uint32 difficulty) const;
     SpellEffectInfo const* GetEffect(uint32 difficulty, uint32 index) const;

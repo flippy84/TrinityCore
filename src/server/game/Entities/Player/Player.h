@@ -285,13 +285,6 @@ struct CUFProfile
     // More fields can be added to BoolOptions without changing DB schema (up to 32, currently 27)
 };
 
-struct SpellCooldown
-{
-    time_t end;
-    uint16 itemid;
-};
-
-typedef std::map<uint32, SpellCooldown> SpellCooldowns;
 typedef std::unordered_map<uint32 /*instanceId*/, time_t/*releaseTime*/> InstanceTimeMap;
 
 enum TrainerSpellState
@@ -975,6 +968,7 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_SOCIAL_LIST,
     PLAYER_LOGIN_QUERY_LOAD_HOME_BIND,
     PLAYER_LOGIN_QUERY_LOAD_SPELL_COOLDOWNS,
+    PLAYER_LOGIN_QUERY_LOAD_SPELL_CHARGES,
     PLAYER_LOGIN_QUERY_LOAD_DECLINED_NAMES,
     PLAYER_LOGIN_QUERY_LOAD_GUILD,
     PLAYER_LOGIN_QUERY_LOAD_ARENA_INFO,
@@ -1937,8 +1931,6 @@ class Player : public Unit, public GridObject<Player>
         PlayerSpellMap const& GetSpellMap() const { return m_spells; }
         PlayerSpellMap      & GetSpellMap()       { return m_spells; }
 
-        SpellCooldowns const& GetSpellCooldownMap() const { return m_spellCooldowns; }
-
         void AddSpellMod(SpellModifier* mod, bool apply);
         bool IsAffectedBySpellmod(SpellInfo const* spellInfo, SpellModifier* mod, Spell* spell = NULL);
         template <class T> T ApplySpellMod(uint32 spellId, SpellModOp op, T &basevalue, Spell* spell = NULL);
@@ -1948,27 +1940,7 @@ class Player : public Unit, public GridObject<Player>
         void DropModCharge(SpellModifier* mod, Spell* spell);
         void SetSpellModTakingSpell(Spell* spell, bool apply);
 
-        static uint32 const infinityCooldownDelay = MONTH;  // used for set "infinity cooldowns" for spells and check
-        static uint32 const infinityCooldownDelayCheck = MONTH/2;
-        bool HasSpellCooldown(uint32 spell_id) const;
-        uint32 GetSpellCooldownDelay(uint32 spell_id) const;
-        void AddSpellAndCategoryCooldowns(SpellInfo const* spellInfo, uint32 itemId, Spell* spell = NULL, bool infinityCooldown = false);
-        void AddSpellCooldown(uint32 spell_id, uint32 itemid, time_t end_time);
-        void ModifySpellCooldown(uint32 spellId, int32 cooldown);
-        void SendCooldownEvent(SpellInfo const* spellInfo, uint32 itemId = 0, Spell* spell = NULL, bool setCooldown = true);
-        void ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs) override;
-        void RemoveSpellCooldown(uint32 spell_id, bool update = false);
-        void RemoveSpellCategoryCooldown(uint32 cat, bool update = false);
-        void SendClearCooldown(uint32 spell_id, Unit* target);
-        void SendClearAllCooldowns(Unit* target);
-
-        GlobalCooldownMgr& GetGlobalCooldownMgr() { return m_GlobalCooldownMgr; }
-
-        void RemoveCategoryCooldown(uint32 cat);
         void RemoveArenaSpellCooldowns(bool removeActivePetCooldowns = false);
-        void RemoveAllSpellCooldown();
-        void _LoadSpellCooldowns(PreparedQueryResult result);
-        void _SaveSpellCooldowns(SQLTransaction& trans);
         uint32 GetLastPotionId() { return m_lastPotionId; }
         void SetLastPotionId(uint32 item_id) { m_lastPotionId = item_id; }
         void UpdatePotionCooldown(Spell* spell = NULL);
@@ -2261,8 +2233,6 @@ class Player : public Unit, public GridObject<Player>
         uint32 GetMaxPersonalArenaRatingRequirement(uint32 minarenaslot) const;
 
         //End of PvP System
-
-        inline SpellCooldowns GetSpellCooldowns() const { return m_spellCooldowns; }
 
         void SetDrunkValue(uint8 newDrunkValue, uint32 itemId = 0);
         uint8 GetDrunkValue() const { return GetByteValue(PLAYER_BYTES_3, PLAYER_BYTES_3_OFFSET_INEBRIATION); }
@@ -2844,8 +2814,6 @@ class Player : public Unit, public GridObject<Player>
         std::unordered_map<uint32 /*overridenSpellId*/, std::unordered_set<uint32> /*newSpellId*/> m_overrideSpells;
         uint32 m_lastPotionId;                              // last used health/mana potion in combat, that block next potion use
 
-        GlobalCooldownMgr m_GlobalCooldownMgr;
-
         PlayerTalentInfo* _talentMgr;
 
         ActionButtonList m_actionButtons;
@@ -3000,8 +2968,6 @@ class Player : public Unit, public GridObject<Player>
 
         AchievementMgr<Player>* m_achievementMgr;
         ReputationMgr*  m_reputationMgr;
-
-        SpellCooldowns m_spellCooldowns;
 
         uint32 m_ChampioningFaction;
 

@@ -942,23 +942,20 @@ SpellEffectInfo::StaticData SpellEffectInfo::_data[TOTAL_SPELL_EFFECTS] =
     {EFFECT_IMPLICIT_TARGET_NONE,     TARGET_OBJECT_TYPE_NONE}, // 244 SPELL_EFFECT_244
 };
 
-SpellInfo::SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap effects)
+SpellInfo::SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap const& effectsMap)
 {
     Id = spellEntry->ID;
 
     // SpellDifficultyEntry
-    for (SpellEffectEntryMap::const_iterator itr = effects.begin(); itr != effects.end(); ++itr)
+    for (SpellEffectEntryMap::value_type const& itr : effectsMap)
     {
-        SpellEffectEntryVector effects = itr->second;
-        _effects[itr->first].resize(effects.size());
+        SpellEffectEntryVector const& effects = itr.second;
+        _effects[itr.first].resize(effects.size());
 
-        for (uint32 i = effects.size(); i > 0; --i)
+        for (size_t i = 0; i < effects.size(); ++i)
         {
-            SpellEffectEntry const* effect = effects[i - 1];
-            if (!effect)
-                continue;
-
-            _effects[itr->first][effect->EffectIndex] = new SpellEffectInfo(spellEntry, this, effect->EffectIndex, effect);
+            if (SpellEffectEntry const* effect = effects[i])
+                _effects[itr.first][effect->EffectIndex] = new SpellEffectInfo(spellEntry, this, effect->EffectIndex, effect);
         }
     }
 
@@ -1054,6 +1051,7 @@ SpellInfo::SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap effects)
     StartRecoveryCategory = _categorie ? _categorie->StartRecoveryCategory : 0;
     DmgClass = _categorie ? _categorie->DefenseType : 0;
     PreventionType = _categorie ? _categorie->PreventionType : 0;
+    ChargeCategoryEntry = _categorie ? sSpellCategoryStore.LookupEntry(_categorie->ChargeCategory) : 0;
 
     // SpellClassOptionsEntry
     SpellClassOptionsEntry const* _class = GetSpellClassOptions();
@@ -1127,6 +1125,15 @@ SpellInfo::SpellInfo(SpellEntry const* spellEntry, SpellEffectEntryMap effects)
 SpellInfo::~SpellInfo()
 {
     _UnloadImplicitTargetConditionLists();
+    _UnloadSpellEffects();
+}
+
+void SpellInfo::_UnloadSpellEffects()
+{
+    for (SpellEffectInfoMap::value_type& i : _effects)
+        for (size_t j = 0; j < i.second.size(); ++j)
+            delete i.second[j];
+    _effects.clear();
 }
 
 uint32 SpellInfo::GetCategory() const
@@ -1816,7 +1823,10 @@ SpellCastResult SpellInfo::CheckLocation(uint32 map_id, uint32 zone_id, uint32 a
                 }
                 case SPELL_AURA_MOUNTED:
                 {
-                    if (effect->MiscValueB && !player->GetMountCapability(effect->MiscValueB))
+                    uint32 mountType = effect->MiscValueB;
+                    if (MountEntry const* mountEntry = sDB2Manager.GetMount(Id))
+                        mountType = mountEntry->MountTypeId;
+                    if (mountType && !player->GetMountCapability(mountType))
                         return SPELL_FAILED_NOT_HERE;
                     break;
                 }
