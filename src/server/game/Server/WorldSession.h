@@ -85,6 +85,11 @@ namespace WorldPackets
         class AuctionHelloRequest;
     }
 
+    namespace Auth
+    {
+        enum class ConnectToSerial : uint32;
+    }
+
     namespace BlackMarket
     {
         class BlackMarketOpen;
@@ -113,6 +118,11 @@ namespace WorldPackets
         class LogoutCancel;
         class LoadingScreenNotify;
         class SetActionBarToggles;
+        class PlayedTimeClient;
+        class ShowingCloak;
+        class ShowingHelm;
+
+        enum class LoginFailureReason : uint8;
     }
 
     namespace ClientConfig
@@ -139,6 +149,7 @@ namespace WorldPackets
         class ChatMessageDND;
         class ChatMessageEmote;
         class CTextEmote;
+        class EmoteClient;
     }
 
     namespace Combat
@@ -347,10 +358,18 @@ namespace WorldPackets
 
     namespace Ticket
     {
+        class GMSurveySubmit;
+        class GMTicketAcknowledgeSurvey;
+        class GMTicketCreate;
+        class GMTicketDelete;
         class GMTicketGetSystemStatus;
         class GMTicketGetCaseStatus;
         class GMTicketGetTicket;
-        class GMTicketAcknowledgeSurvey;
+        class GMTicketResponseResolve;
+        class GMTicketUpdateText;
+        class SupportTicketSubmitBug;
+        class SupportTicketSubmitSuggestion;
+        class SupportTicketSubmitComplaint;
     }
 
     namespace Trade
@@ -746,7 +765,10 @@ class WorldSession
         void HandleCharCreateOpcode(WorldPackets::Character::CreateChar& charCreate);
         void HandleCharCreateCallback(PreparedQueryResult result, WorldPackets::Character::CharacterCreateInfo* createInfo);
         void HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin& playerLogin);
+
+        void SendConnectToInstance(WorldPackets::Auth::ConnectToSerial serial);
         void HandleContinuePlayerLogin();
+        void AbortLogin(WorldPackets::Character::LoginFailureReason reason);
         void HandleLoadScreenOpcode(WorldPackets::Character::LoadingScreenNotify& loadingScreenNotify);
         void HandlePlayerLogin(LoginQueryHolder * holder);
         void HandleCharRenameOpcode(WorldPackets::Character::CharacterRenameRequest& request);
@@ -776,7 +798,7 @@ class WorldSession
         void SendUndeleteCharacterResponse(CharacterUndeleteResult result, WorldPackets::Character::CharacterUndeleteInfo const* undeleteInfo);
 
         // played time
-        void HandlePlayedTime(WorldPacket& recvPacket);
+        void HandlePlayedTime(WorldPackets::Character::PlayedTimeClient& packet);
 
         // new
         void HandleMoveUnRootAck(WorldPacket& recvPacket);
@@ -801,8 +823,8 @@ class WorldSession
         void HandleMountSpecialAnimOpcode(WorldPacket& recvdata);
 
         // character view
-        void HandleShowingHelmOpcode(WorldPacket& recvData);
-        void HandleShowingCloakOpcode(WorldPacket& recvData);
+        void HandleShowingHelmOpcode(WorldPackets::Character::ShowingHelm& packet);
+        void HandleShowingCloakOpcode(WorldPackets::Character::ShowingCloak& packet);
 
         // repair
         void HandleRepairItemOpcode(WorldPackets::Item::RepairItem& packet);
@@ -826,22 +848,24 @@ class WorldSession
         void HandleLogoutCancelOpcode(WorldPackets::Character::LogoutCancel& logoutCancel);
 
         // GM Ticket opcodes
-        void HandleGMTicketCreateOpcode(WorldPacket& recvPacket);
-        void HandleGMTicketUpdateOpcode(WorldPacket& recvPacket);
-        void HandleGMTicketDeleteOpcode(WorldPacket& recvPacket);
+        void HandleGMTicketCreateOpcode(WorldPackets::Ticket::GMTicketCreate& packet);
+        void HandleGMTicketUpdateTextOpcode(WorldPackets::Ticket::GMTicketUpdateText& packet);
+        void HandleGMTicketDeleteOpcode(WorldPackets::Ticket::GMTicketDelete& packet);
         void HandleGMTicketGetCaseStatusOpcode(WorldPackets::Ticket::GMTicketGetCaseStatus& packet);
         void HandleGMTicketGetTicketOpcode(WorldPackets::Ticket::GMTicketGetTicket& packet);
         void HandleGMTicketSystemStatusOpcode(WorldPackets::Ticket::GMTicketGetSystemStatus& packet);
-        void HandleGMSurveySubmit(WorldPacket& recvPacket);
-        void HandleReportLag(WorldPacket& recvPacket);
-        void HandleGMResponseResolve(WorldPacket& recvPacket);
+        void HandleGMSurveySubmit(WorldPackets::Ticket::GMSurveySubmit& packet);
+        void HandleGMResponseResolve(WorldPackets::Ticket::GMTicketResponseResolve& packet);
+        void HandleSupportTicketSubmitBug(WorldPackets::Ticket::SupportTicketSubmitBug& packet);
+        void HandleSupportTicketSubmitSuggestion(WorldPackets::Ticket::SupportTicketSubmitSuggestion& packet);
+        void HandleSupportTicketSubmitComplaint(WorldPackets::Ticket::SupportTicketSubmitComplaint& packet);
 
         void HandleTogglePvP(WorldPacket& recvPacket);
 
         void HandleZoneUpdateOpcode(WorldPacket& recvPacket);
         void HandleSetSelectionOpcode(WorldPackets::Misc::SetSelection& packet);
         void HandleStandStateChangeOpcode(WorldPackets::Misc::StandStateChange& packet);
-        void HandleEmoteOpcode(WorldPacket& recvPacket);
+        void HandleEmoteOpcode(WorldPackets::Chat::EmoteClient& packet);
 
         // Social
         void HandleContactListOpcode(WorldPackets::Social::SendContactList& packet);

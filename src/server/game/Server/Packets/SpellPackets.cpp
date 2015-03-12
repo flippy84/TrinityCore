@@ -154,7 +154,7 @@ ByteBuffer& operator>>(ByteBuffer& buffer, WorldPackets::Spells::SpellTargetData
 {
     buffer.ResetBitPos();
 
-    targetData.Flags = buffer.ReadBits(21);
+    targetData.Flags = buffer.ReadBits(23);
     targetData.SrcLocation.HasValue = buffer.ReadBit();
     targetData.DstLocation.HasValue = buffer.ReadBit();
     targetData.Orientation.HasValue = buffer.ReadBit();
@@ -243,7 +243,7 @@ ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Spells::TargetLocation co
 
 ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Spells::SpellTargetData const& spellTargetData)
 {
-    data.WriteBits(spellTargetData.Flags, 21);
+    data.WriteBits(spellTargetData.Flags, 23);
     data.WriteBit(spellTargetData.SrcLocation.HasValue);
     data.WriteBit(spellTargetData.DstLocation.HasValue);
     data.WriteBit(spellTargetData.Orientation.HasValue);
@@ -595,6 +595,13 @@ WorldPacket const* WorldPackets::Spells::SendSpellCharges::Write()
     _worldPacket << uint32(Entries.size());
     for (SpellChargeEntry const& chargeEntry : Entries)
         _worldPacket << chargeEntry;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Spells::ClearTarget::Write()
+{
+    _worldPacket << Guid;
 
     return &_worldPacket;
 }

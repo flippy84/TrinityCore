@@ -1004,11 +1004,14 @@ class spell_mage_master_of_elements : public SpellScriptLoader
             {
                 PreventDefaultAction();
 
-                int32 mana = int32(eventInfo.GetDamageInfo()->GetSpellInfo()->CalcPowerCost(GetTarget(), eventInfo.GetDamageInfo()->GetSchoolMask()));
-                mana = CalculatePct(mana, aurEff->GetAmount());
-
-                if (mana > 0)
-                    GetTarget()->CastCustomSpell(SPELL_MAGE_MASTER_OF_ELEMENTS_ENERGIZE, SPELLVALUE_BASE_POINT0, mana, GetTarget(), true, NULL, aurEff);
+                std::vector<SpellInfo::CostData> costs = eventInfo.GetDamageInfo()->GetSpellInfo()->CalcPowerCost(GetTarget(), eventInfo.GetDamageInfo()->GetSchoolMask());
+                auto m = std::find_if(costs.begin(), costs.end(), [](SpellInfo::CostData const& cost) { return cost.Power == POWER_MANA; });
+                if (m != costs.end())
+                {
+                    int32 mana = CalculatePct(m->Amount, aurEff->GetAmount());
+                    if (mana > 0)
+                        GetTarget()->CastCustomSpell(SPELL_MAGE_MASTER_OF_ELEMENTS_ENERGIZE, SPELLVALUE_BASE_POINT0, mana, GetTarget(), true, NULL, aurEff);
+                }
             }
 
             void Register() override
@@ -1298,7 +1301,7 @@ class spell_mage_ring_of_frost : public SpellScriptLoader
                 GetTarget()->GetAllMinionsByEntry(MinionList, GetSpellInfo()->GetEffect(EFFECT_0)->MiscValue);
 
                 // Get the last summoned RoF, save it and despawn older ones
-                for (std::list<TempSummon*>::iterator itr = MinionList.begin(); itr != MinionList.end(); itr++)
+                for (std::list<TempSummon*>::iterator itr = MinionList.begin(); itr != MinionList.end(); ++itr)
                 {
                     TempSummon* summon = (*itr);
 

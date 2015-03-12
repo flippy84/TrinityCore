@@ -189,3 +189,15 @@ WorldPacket const* WorldPackets::Chat::STextEmote::Write()
 
     return &_worldPacket;
 }
+
+WorldPacket const* WorldPackets::Chat::PrintNotification::Write()
+{
+    _worldPacket.WriteBits(NotifyText.size(), 12);
+    _worldPacket.WriteString(NotifyText);
+    return &_worldPacket;
+}
+
+void WorldPackets::Chat::EmoteClient::Read()
+{
+    _worldPacket >> EmoteID;
+}

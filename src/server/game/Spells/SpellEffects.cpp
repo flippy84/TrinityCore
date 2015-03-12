@@ -68,6 +68,7 @@
 #include "ReputationMgr.h"
 #include "AreaTrigger.h"
 #include "MiscPackets.h"
+#include "SpellPackets.h"
 
 pEffect SpellEffects[TOTAL_SPELL_EFFECTS]=
 {
@@ -4386,9 +4387,9 @@ void Spell::EffectForceDeselect(SpellEffIndex /*effIndex*/)
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT)
         return;
 
-    WorldPacket data(SMSG_CLEAR_TARGET, 8);
-    data << m_caster->GetGUID();
-    m_caster->SendMessageToSet(&data, true);
+    WorldPackets::Spells::ClearTarget clearTarget;
+    clearTarget.Guid = m_caster->GetGUID();
+    m_caster->SendMessageToSet(clearTarget.Write(), true);
 }
 
 void Spell::EffectSelfResurrect(SpellEffIndex /*effIndex*/)
@@ -4747,13 +4748,18 @@ void Spell::EffectDestroyAllTotems(SpellEffIndex /*effIndex*/)
             SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spell_id);
             if (spellInfo)
             {
-                mana += spellInfo->ManaCost;
-                mana += int32(CalculatePct(m_caster->GetCreateMana(), spellInfo->ManaCostPercentage));
+                std::vector<SpellInfo::CostData> costs = spellInfo->CalcPowerCost(m_caster, spellInfo->GetSchoolMask());
+                auto m = std::find_if(costs.begin(), costs.end(), [](SpellInfo::CostData const& cost) { return cost.Power == POWER_MANA; });
+                if (m != costs.end())
+                    mana += m->Amount;
             }
+
             totem->ToTotem()->UnSummon();
         }
     }
+
     ApplyPct(mana, damage);
+
     if (mana)
         m_caster->CastCustomSpell(m_caster, 39104, &mana, NULL, NULL, true);
 }
@@ -5494,10 +5500,7 @@ void Spell::EffectPlayMusic(SpellEffIndex /*effIndex*/)
         return;
     }
 
-    WorldPacket data(SMSG_PLAY_MUSIC, 4);
-    data << uint32(soundid);
-    data << unitTarget->GetGUID();
-    unitTarget->ToPlayer()->GetSession()->SendPacket(&data);
+    unitTarget->ToPlayer()->GetSession()->SendPacket(WorldPackets::Misc::PlayMusic(soundid).Write());
 }
 
 void Spell::EffectSpecCount(SpellEffIndex /*effIndex*/)
@@ -5621,11 +5624,7 @@ void Spell::EffectCastButtons(SpellEffIndex /*effIndex*/)
         if (!spellInfo->HasAttribute(SPELL_ATTR9_SUMMON_PLAYER_TOTEM))
             continue;
 
-        int32 cost = spellInfo->CalcPowerCost(m_caster, spellInfo->GetSchoolMask());
-        if (m_caster->GetPower(POWER_MANA) < cost)
-            continue;
-
-        TriggerCastFlags triggerFlags = TriggerCastFlags(TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_CAST_DIRECTLY);
+        TriggerCastFlags triggerFlags = TriggerCastFlags(TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_CAST_DIRECTLY | TRIGGERED_DONT_REPORT_CAST_ERROR);
         m_caster->CastSpell(m_caster, spell_id, triggerFlags);
     }
 }

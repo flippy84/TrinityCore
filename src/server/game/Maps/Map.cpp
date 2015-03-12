@@ -86,7 +86,10 @@ bool Map::ExistMap(uint32 mapid, int gx, int gy)
     FILE* pf = fopen(fileName, "rb");
 
     if (!pf)
-        TC_LOG_ERROR("maps", "Map file '%s': does not exist!", fileName);
+    {
+        TC_LOG_ERROR("maps", "Map file '%s' does not exist!", fileName);
+        TC_LOG_ERROR("maps", "Please place MAP-files (*.map) in the appropriate directory (%s), or correct the DataDir setting in your worldserver.conf file.", (sWorld->GetDataPath()+"maps/").c_str());
+    }
     else
     {
         map_fileheader header;
@@ -115,7 +118,8 @@ bool Map::ExistVMap(uint32 mapid, int gx, int gy)
             if (!exists)
             {
                 std::string name = vmgr->getDirFileName(mapid, gx, gy);
-                TC_LOG_ERROR("maps", "VMap file '%s' is missing or points to wrong version of vmap file. Redo vmaps with latest version of vmap_assembler.exe.", (sWorld->GetDataPath()+"vmaps/"+name).c_str());
+                TC_LOG_ERROR("maps", "VMap file '%s' does not exist", (sWorld->GetDataPath()+"vmaps/"+name).c_str());
+                TC_LOG_ERROR("maps", "Please place VMAP-files (*.vmtree and *.vmtile) in the vmap-directory (%s), or correct the DataDir setting in your worldserver.conf file.", (sWorld->GetDataPath()+"vmaps/").c_str());
                 return false;
             }
         }
@@ -3490,12 +3494,7 @@ void Map::SendZoneDynamicInfo(Player* player)
         return;
 
     if (uint32 music = itr->second.MusicId)
-    {
-        WorldPacket data(SMSG_PLAY_MUSIC, 4);
-        data << uint32(music);
-        data << player->GetGUID();
-        player->SendDirectMessage(&data);
-    }
+        player->SendDirectMessage(WorldPackets::Misc::PlayMusic(music).Write());
 
     if (WeatherState weatherId = itr->second.WeatherId)
     {
@@ -3526,12 +3525,7 @@ void Map::SetZoneMusic(uint32 zoneId, uint32 musicId)
         for (Map::PlayerList::const_iterator itr = players.begin(); itr != players.end(); ++itr)
             if (Player* player = itr->GetSource())
                 if (player->GetZoneId() == zoneId)
-                {
-                    WorldPacket data(SMSG_PLAY_MUSIC, 4);
-                    data << uint32(musicId);
-                    data << player->GetGUID();
-                    player->SendDirectMessage(&data);
-                }
+                    player->SendDirectMessage(WorldPackets::Misc::PlayMusic(musicId).Write());
     }
 }
 
