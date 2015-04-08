@@ -427,25 +427,39 @@ void WorldPackets::Quest::QuestGiverQueryQuest::Read()
     RespondToGiver = _worldPacket.ReadBit();
 }
 
-WorldPacket const* WorldPackets::Quest::SetQuestCompletedBit::Write()
+void WorldPackets::Quest::QuestGiverAcceptQuest::Read()
 {
-    _worldPacket << int32(Bit);
-    _worldPacket << int32(QuestID);
-    return &_worldPacket;
+    _worldPacket >> QuestGiverGUID;
+    _worldPacket >> QuestID;
+    StartCheat = _worldPacket.ReadBit();
 }
 
-WorldPacket const* WorldPackets::Quest::ClearQuestCompletedBit::Write()
+void WorldPackets::Quest::QuestLogRemoveQuest::Read()
 {
-    _worldPacket << int32(Bit);
-    _worldPacket << int32(QuestID);
-    return &_worldPacket;
+    _worldPacket >> Entry;
 }
 
-WorldPacket const* WorldPackets::Quest::ClearQuestCompletedBits::Write()
+WorldPacket const* WorldPackets::Quest::QuestGiverQuestList::Write()
 {
-    _worldPacket << uint32(Qbits.size());
-    if (!Qbits.empty())
-        _worldPacket.append(Qbits.data(), Qbits.size());
+    _worldPacket << QuestGiverGUID;
+    _worldPacket << GreetEmoteDelay;
+    _worldPacket << GreetEmoteType;
+    _worldPacket << uint32(GossipTexts.size());
+    for (GossipTextData const& gossip : GossipTexts)
+    {
+        _worldPacket << gossip.QuestID;
+        _worldPacket << gossip.QuestType;
+        _worldPacket << gossip.QuestLevel;
+        _worldPacket << gossip.QuestFlags;
+        _worldPacket << gossip.QuestFlagsEx;
+        _worldPacket.FlushBits();
+        _worldPacket.WriteBit(gossip.Repeatable);
+        _worldPacket.WriteBits(gossip.QuestTitle.size(), 9);
+        _worldPacket.WriteString(gossip.QuestTitle);
+    }
+    _worldPacket.FlushBits();
+    _worldPacket.WriteBits(Greeting.size(), 11);
+    _worldPacket.WriteString(Greeting);
 
     return &_worldPacket;
 }

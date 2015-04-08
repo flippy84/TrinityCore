@@ -24,7 +24,7 @@ void WorldPackets::Guild::QueryGuildInfo::Read()
 }
 
 WorldPackets::Guild::QueryGuildInfoResponse::QueryGuildInfoResponse()
-    : ServerPacket(SMSG_GUILD_QUERY_RESPONSE) { }
+    : ServerPacket(SMSG_QUERY_GUILD_INFO_RESPONSE) { }
 
 WorldPacket const* WorldPackets::Guild::QueryGuildInfoResponse::Write()
 {
@@ -509,6 +509,7 @@ WorldPacket const* WorldPackets::Guild::GuildPartyState::Write()
 ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Guild::GuildRewardItem const& rewardItem)
 {
     data << rewardItem.ItemID;
+    data << rewardItem.Unk4;
     data << uint32(rewardItem.AchievementsRequired.size());
     data << rewardItem.RaceMask;
     data << rewardItem.MinGuildLevel;

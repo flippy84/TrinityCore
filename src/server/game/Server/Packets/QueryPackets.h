@@ -33,7 +33,7 @@ namespace WorldPackets
         class QueryCreature final : public ClientPacket
         {
         public:
-            QueryCreature(WorldPacket&& packet) : ClientPacket(CMSG_CREATURE_QUERY, std::move(packet)) { }
+            QueryCreature(WorldPacket&& packet) : ClientPacket(CMSG_QUERY_CREATURE, std::move(packet)) { }
 
             void Read() override;
 
@@ -64,7 +64,7 @@ namespace WorldPackets
         class QueryCreatureResponse final : public ServerPacket
         {
         public:
-            QueryCreatureResponse() : ServerPacket(SMSG_CREATURE_QUERY_RESPONSE, 76) { }
+            QueryCreatureResponse() : ServerPacket(SMSG_QUERY_CREATURE_RESPONSE, 76) { }
 
             WorldPacket const* Write() override;
 
@@ -82,7 +82,7 @@ namespace WorldPackets
         class QueryPlayerName final : public ClientPacket
         {
         public:
-            QueryPlayerName(WorldPacket&& packet) : ClientPacket(CMSG_NAME_QUERY, std::move(packet)) { }
+            QueryPlayerName(WorldPacket&& packet) : ClientPacket(CMSG_QUERY_PLAYER_NAME, std::move(packet)) { }
 
             void Read() override;
 
@@ -109,7 +109,7 @@ namespace WorldPackets
         class QueryPlayerNameResponse final : public ServerPacket
         {
         public:
-            QueryPlayerNameResponse() : ServerPacket(SMSG_NAME_QUERY_RESPONSE, 60) { }
+            QueryPlayerNameResponse() : ServerPacket(SMSG_QUERY_PLAYER_NAME_RESPONSE, 60) { }
 
             WorldPacket const* Write() override;
 
@@ -121,7 +121,7 @@ namespace WorldPackets
         class QueryPageText final : public ClientPacket
         {
         public:
-            QueryPageText(WorldPacket&& packet) : ClientPacket(CMSG_PAGE_TEXT_QUERY, std::move(packet)) { }
+            QueryPageText(WorldPacket&& packet) : ClientPacket(CMSG_QUERY_PAGE_TEXT, std::move(packet)) { }
 
             void Read() override;
 
@@ -139,7 +139,7 @@ namespace WorldPackets
         class QueryPageTextResponse final : public ServerPacket
         {
         public:
-            QueryPageTextResponse() : ServerPacket(SMSG_PAGE_TEXT_QUERY_RESPONSE, 15) { }
+            QueryPageTextResponse() : ServerPacket(SMSG_QUERY_PAGE_TEXT_RESPONSE, 15) { }
 
             WorldPacket const* Write() override;
 
@@ -151,7 +151,7 @@ namespace WorldPackets
         class QueryNPCText final : public ClientPacket
         {
         public:
-            QueryNPCText(WorldPacket&& packet) : ClientPacket(CMSG_NPC_TEXT_QUERY, std::move(packet)) { }
+            QueryNPCText(WorldPacket&& packet) : ClientPacket(CMSG_QUERY_NPC_TEXT, std::move(packet)) { }
 
             void Read() override;
 
@@ -162,7 +162,7 @@ namespace WorldPackets
         class QueryNPCTextResponse final : public ServerPacket
         {
         public:
-            QueryNPCTextResponse() : ServerPacket(SMSG_NPC_TEXT_UPDATE, 73) { }
+            QueryNPCTextResponse() : ServerPacket(SMSG_QUERY_NPC_TEXT_RESPONSE, 73) { }
 
             WorldPacket const* Write() override;
 
@@ -215,7 +215,7 @@ namespace WorldPackets
         class QueryGameObject final : public ClientPacket
         {
         public:
-            QueryGameObject(WorldPacket&& packet) : ClientPacket(CMSG_GAMEOBJECT_QUERY, std::move(packet)) { }
+            QueryGameObject(WorldPacket&& packet) : ClientPacket(CMSG_QUERY_GAME_OBJECT, std::move(packet)) { }
 
             void Read() override;
 
@@ -246,7 +246,7 @@ namespace WorldPackets
         class QueryGameObjectResponse final : public ServerPacket
         {
         public:
-            QueryGameObjectResponse() : ServerPacket(SMSG_GAMEOBJECT_QUERY_RESPONSE, 165) { }
+            QueryGameObjectResponse() : ServerPacket(SMSG_QUERY_GAME_OBJECT_RESPONSE, 165) { }
 
             WorldPacket const* Write() override;
 
@@ -315,6 +315,56 @@ namespace WorldPackets
 
             time_t CurrentTime = time_t(0);
             int32 TimeOutRequest = 0;
+        };
+
+        class QuestPOIQuery final : public ClientPacket
+        {
+        public:
+            QuestPOIQuery(WorldPacket&& packet) : ClientPacket(CMSG_QUEST_POI_QUERY, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 MissingQuestCount = 0;
+            int32 MissingQuestPOIs[50];
+        };
+
+        struct QuestPOIBlobPoint
+        {
+            int32 X = 0;
+            int32 Y = 0;
+        };
+
+        struct QuestPOIBlobData
+        {
+            int32 BlobIndex = 0;
+            int32 ObjectiveIndex = 0;
+            int32 QuestObjectiveID = 0;
+            int32 QuestObjectID = 0;
+            int32 MapID = 0;
+            int32 WorldMapAreaID = 0;
+            int32 Floor = 0;
+            int32 Priority = 0;
+            int32 Flags = 0;
+            int32 WorldEffectID = 0;
+            int32 PlayerConditionID = 0;
+            int32 UnkWoD1 = 0;
+            std::vector<QuestPOIBlobPoint> QuestPOIBlobPointStats;
+        };
+
+        struct QuestPOIData
+        {
+            int32 QuestID = 0;
+            std::vector<QuestPOIBlobData> QuestPOIBlobDataStats;
+        };
+
+        class QuestPOIQueryResponse final : public ServerPacket
+        {
+        public:
+            QuestPOIQueryResponse() : ServerPacket(SMSG_QUEST_POI_QUERY_RESPONSE, 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            std::vector<QuestPOIData> QuestPOIDataStats;
         };
     }
 }

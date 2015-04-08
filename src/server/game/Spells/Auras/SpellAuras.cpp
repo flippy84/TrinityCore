@@ -332,9 +332,6 @@ Aura* Aura::Create(SpellInfo const* spellproto, uint32 effMask, WorldObject* own
     else
         casterGUID = caster->GetGUID();
 
-    // at this point of Aura::Create() there MUST be a valid caster
-    ASSERT(caster);
-
     // check if aura can be owned by owner
     if (owner->isType(TYPEMASK_UNIT))
         if (!owner->IsInWorld() || ((Unit*)owner)->IsDuringRemoveFromWorld())
@@ -1003,11 +1000,11 @@ void Aura::RefreshSpellMods()
             player->RestoreAllSpellMods(0, this);
 }
 
-bool Aura::HasMoreThanOneEffectForType(AuraType auraType, uint32 difficulty) const
+bool Aura::HasMoreThanOneEffectForType(AuraType auraType) const
 {
     uint32 count = 0;
     for (SpellEffectInfo const* effect : GetSpellEffectInfos())
-    if (effect && HasEffect(effect->EffectIndex) && AuraType(effect->ApplyAuraName) == auraType)
+        if (effect && HasEffect(effect->EffectIndex) && AuraType(effect->ApplyAuraName) == auraType)
             ++count;
 
     return count > 1;

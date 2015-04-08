@@ -129,42 +129,35 @@ void WorldSession::HandleUseItemOpcode(WorldPackets::Spells::UseItem& packet)
     }
 }
 
-void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
+void WorldSession::HandleOpenItemOpcode(WorldPackets::Spells::OpenItem& packet)
 {
-    TC_LOG_DEBUG("network", "WORLD: CMSG_OPEN_ITEM packet, data length = %i", (uint32)recvPacket.size());
-
-    Player* pUser = _player;
+    Player* player = _player;
 
     // ignore for remote control state
-    if (pUser->m_mover != pUser)
+    if (player->m_mover != player)
         return;
+    TC_LOG_INFO("network", "bagIndex: %u, slot: %u", packet.Slot, packet.PackSlot);
 
-    uint8 bagIndex, slot;
-
-    recvPacket >> bagIndex >> slot;
-
-    TC_LOG_INFO("network", "bagIndex: %u, slot: %u", bagIndex, slot);
-
-    Item* item = pUser->GetItemByPos(bagIndex, slot);
+    Item* item = player->GetItemByPos(packet.Slot, packet.PackSlot);
     if (!item)
     {
-        pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL);
+        player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL);
         return;
     }
 
     ItemTemplate const* proto = item->GetTemplate();
     if (!proto)
     {
-        pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, item, NULL);
+        player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, item, NULL);
         return;
     }
 
     // Verify that the bag is an actual bag or wrapped item that can be used "normally"
     if (!(proto->GetFlags() & ITEM_PROTO_FLAG_OPENABLE) && !item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_WRAPPED))
     {
-        pUser->SendEquipError(EQUIP_ERR_CLIENT_LOCKED_OUT, item, NULL);
+        player->SendEquipError(EQUIP_ERR_CLIENT_LOCKED_OUT, item, NULL);
         TC_LOG_ERROR("network", "Possible hacking attempt: Player %s [%s] tried to open item [%s, entry: %u] which is not openable!",
-            pUser->GetName().c_str(), pUser->GetGUID().ToString().c_str(), item->GetGUID().ToString().c_str(), proto->GetId());
+            player->GetName().c_str(), player->GetGUID().ToString().c_str(), item->GetGUID().ToString().c_str(), proto->GetId());
         return;
     }
 
@@ -176,7 +169,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
 
         if (!lockInfo)
         {
-            pUser->SendEquipError(EQUIP_ERR_ITEM_LOCKED, item, NULL);
+            player->SendEquipError(EQUIP_ERR_ITEM_LOCKED, item, NULL);
             TC_LOG_ERROR("network", "WORLD::OpenItem: item [%s] has an unknown lockId: %u!", item->GetGUID().ToString().c_str(), lockId);
             return;
         }
@@ -184,7 +177,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
         // was not unlocked yet
         if (item->IsLocked())
         {
-            pUser->SendEquipError(EQUIP_ERR_ITEM_LOCKED, item, NULL);
+            player->SendEquipError(EQUIP_ERR_ITEM_LOCKED, item, NULL);
             return;
         }
     }
@@ -206,12 +199,12 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
             item->SetGuidValue(ITEM_FIELD_GIFTCREATOR, ObjectGuid::Empty);
             item->SetEntry(entry);
             item->SetUInt32Value(ITEM_FIELD_FLAGS, flags);
-            item->SetState(ITEM_CHANGED, pUser);
+            item->SetState(ITEM_CHANGED, player);
         }
         else
         {
             TC_LOG_ERROR("network", "Wrapped item %s don't have record in character_gifts table and will deleted", item->GetGUID().ToString().c_str());
-            pUser->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+            player->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
             return;
         }
 
@@ -222,10 +215,10 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
         CharacterDatabase.Execute(stmt);
     }
     else
-        pUser->SendLoot(item->GetGUID(), LOOT_CORPSE);
+        player->SendLoot(item->GetGUID(), LOOT_CORPSE);
 }
 
-void WorldSession::HandleGameObjectUseOpcode(WorldPackets::GameObject::GameObjectUse& packet)
+void WorldSession::HandleGameObjectUseOpcode(WorldPackets::GameObject::GameObjUse& packet)
 {
     if (GameObject* obj = GetPlayer()->GetMap()->GetGameObject(packet.Guid))
     {
@@ -241,7 +234,7 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPackets::GameObject::GameObjec
     }
 }
 
-void WorldSession::HandleGameobjectReportUse(WorldPackets::GameObject::GameObjectReportUse& packet)
+void WorldSession::HandleGameobjectReportUse(WorldPackets::GameObject::GameObjReportUse& packet)
 {
     // ignore for remote control state
     if (_player->m_mover != _player)
@@ -324,15 +317,10 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     spell->prepare(&targets);
 }
 
-void WorldSession::HandleCancelCastOpcode(WorldPacket& recvPacket)
+void WorldSession::HandleCancelCastOpcode(WorldPackets::Spells::CancelCast& packet)
 {
-    uint32 spellId;
-
-    recvPacket.read_skip<uint8>();                          // counter, increments with every CANCEL packet, don't use for now
-    recvPacket >> spellId;
-
     if (_player->IsNonMeleeSpellCast(false))
-        _player->InterruptNonMeleeSpells(false, spellId, false);
+        _player->InterruptNonMeleeSpells(false, packet.SpellID, false);
 }
 
 void WorldSession::HandleCancelAuraOpcode(WorldPackets::Spells::CancelAura& cancelAura)
@@ -349,7 +337,7 @@ void WorldSession::HandleCancelAuraOpcode(WorldPackets::Spells::CancelAura& canc
     if (spellInfo->IsChanneled())
     {
         if (Spell* curSpell = _player->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-            if (curSpell->GetSpellInfo()->Id == cancelAura.SpellID)
+            if (curSpell->GetSpellInfo()->Id == uint32(cancelAura.SpellID))
                 _player->InterruptSpell(CURRENT_CHANNELED_SPELL);
         return;
     }
@@ -593,7 +581,7 @@ void WorldSession::HandleMirrorImageDataRequest(WorldPacket& recvData)
 
 void WorldSession::HandleUpdateProjectilePosition(WorldPacket& recvPacket)
 {
-    TC_LOG_DEBUG("network", "WORLD: CMSG_UPDATE_PROJECTILE_POSITION");
+    TC_LOG_DEBUG("network", "WORLD: CMSG_MISSILE_TRAJECTORY_COLLISION");
 
     ObjectGuid casterGuid;
     uint32 spellId;
@@ -619,7 +607,7 @@ void WorldSession::HandleUpdateProjectilePosition(WorldPacket& recvPacket)
     pos.Relocate(x, y, z);
     spell->m_targets.ModDst(pos);
 
-    WorldPacket data(SMSG_SET_PROJECTILE_POSITION, 21);
+    WorldPacket data(SMSG_NOTIFY_MISSILE_TRAJECTORY_COLLISION, 21);
     data << casterGuid;
     data << uint8(castCount);
     data << float(x);

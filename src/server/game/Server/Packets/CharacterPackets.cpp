@@ -166,7 +166,7 @@ WorldPacket const* WorldPackets::Character::EnumCharactersResult::Write()
     return &_worldPacket;
 }
 
-void WorldPackets::Character::CreateChar::Read()
+void WorldPackets::Character::CreateCharacter::Read()
 {
     CreateInfo.reset(new CharacterCreateInfo());
     uint32 nameLength = _worldPacket.ReadBits(6);
@@ -185,18 +185,18 @@ void WorldPackets::Character::CreateChar::Read()
         _worldPacket >> CreateInfo->TemplateSet.Value;
 }
 
-WorldPacket const* WorldPackets::Character::CharacterCreateResponse::Write()
+WorldPacket const* WorldPackets::Character::CreateChar::Write()
 {
     _worldPacket << uint8(Code);
     return &_worldPacket;
 }
 
-void WorldPackets::Character::DeleteChar::Read()
+void WorldPackets::Character::CharDelete::Read()
 {
     _worldPacket >> Guid;
 }
 
-WorldPacket const* WorldPackets::Character::CharacterDeleteResponse::Write()
+WorldPacket const* WorldPackets::Character::DeleteChar::Write()
 {
     _worldPacket << uint8(Code);
     return &_worldPacket;
@@ -386,13 +386,10 @@ void WorldPackets::Character::LoadingScreenNotify::Read()
 
 WorldPacket const* WorldPackets::Character::InitialSetup::Write()
 {
-    _worldPacket << uint32(QuestsCompleted.size());
     _worldPacket << uint8(ServerExpansionLevel);
     _worldPacket << uint8(ServerExpansionTier);
     _worldPacket << int32(ServerRegionID);
     _worldPacket << uint32(RaidOrigin);
-    if (!QuestsCompleted.empty())
-        _worldPacket.append(QuestsCompleted.data(), QuestsCompleted.size());
 
     return &_worldPacket;
 }
@@ -402,7 +399,7 @@ void WorldPackets::Character::SetActionBarToggles::Read()
     _worldPacket >> Mask;
 }
 
-void WorldPackets::Character::PlayedTimeClient::Read()
+void WorldPackets::Character::RequestPlayedTime::Read()
 {
     TriggerScriptEvent = _worldPacket.ReadBit();
 }
@@ -425,4 +422,24 @@ void WorldPackets::Character::ShowingCloak::Read()
 void WorldPackets::Character::ShowingHelm::Read()
 {
     ShowHelm = _worldPacket.ReadBit();
+}
+
+void WorldPackets::Character::SetTitle::Read()
+{
+    _worldPacket >> TitleID;
+}
+
+void WorldPackets::Character::AlterApperance::Read()
+{
+    _worldPacket >> NewHairStyle;
+    _worldPacket >> NewHairColor;
+    _worldPacket >> NewFacialHair;
+    _worldPacket >> NewSkinColor;
+    _worldPacket >> Unk;
+}
+
+WorldPacket const* WorldPackets::Character::BarberShopResultServer::Write()
+{
+    _worldPacket << int32(Result);
+    return &_worldPacket;
 }

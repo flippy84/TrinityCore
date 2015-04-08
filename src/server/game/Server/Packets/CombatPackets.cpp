@@ -31,7 +31,7 @@ WorldPacket const* WorldPackets::Combat::AttackStart::Write()
     return &_worldPacket;
 }
 
-WorldPackets::Combat::SAttackStop::SAttackStop(Unit const* attacker, Unit const* victim) : ServerPacket(SMSG_ATTACKSTOP, 16 + 16 + 1)
+WorldPackets::Combat::SAttackStop::SAttackStop(Unit const* attacker, Unit const* victim) : ServerPacket(SMSG_ATTACK_STOP, 16 + 16 + 1)
 {
     Attacker = attacker->GetGUID();
     if (victim)
@@ -175,4 +175,25 @@ void WorldPackets::Combat::SetSheathed::Read()
 {
     _worldPacket >> CurrentSheathState;
     Animate = _worldPacket.ReadBit();
+}
+
+WorldPacket const* WorldPackets::Combat::CancelAutoRepeat::Write()
+{
+    _worldPacket << Guid;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Combat::HealthUpdate::Write()
+{
+    _worldPacket << Guid;
+    _worldPacket << int32(Health);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Combat::ThreatClear::Write()
+{
+    _worldPacket << UnitGUID;
+    return &_worldPacket;
 }

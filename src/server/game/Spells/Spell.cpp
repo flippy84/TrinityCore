@@ -365,7 +365,7 @@ void SpellCastTargets::SetItemTarget(Item* item)
 
 void SpellCastTargets::SetTradeItemTarget(Player* caster)
 {
-    m_itemTargetGUID.SetRawValue({ uint8(TRADE_SLOT_NONTRADED), 0, 0, 0, 0, 0, 0, 0 });
+    m_itemTargetGUID = ObjectGuid::TradeItem;
     m_itemTargetEntry = 0;
     m_targetMask |= TARGET_FLAG_TRADE_ITEM;
 
@@ -489,9 +489,7 @@ void SpellCastTargets::Update(Unit* caster)
             m_itemTarget = player->GetItemByGuid(m_itemTargetGUID);
         else if (m_targetMask & TARGET_FLAG_TRADE_ITEM)
         {
-            ObjectGuid nonTradedGuid;
-            nonTradedGuid.SetRawValue(uint64(0), uint64(TRADE_SLOT_NONTRADED));
-            if (m_itemTargetGUID == nonTradedGuid) // here it is not guid but slot. Also prevents hacking slots
+            if (m_itemTargetGUID == ObjectGuid::TradeItem)
                 if (TradeData* pTrade = player->GetTradeData())
                     m_itemTarget = pTrade->GetTraderData()->GetItem(TRADE_SLOT_NONTRADED);
         }
@@ -523,23 +521,23 @@ void SpellCastTargets::Update(Unit* caster)
 void SpellCastTargets::OutDebug() const
 {
     if (!m_targetMask)
-        TC_LOG_INFO("spells", "No targets");
+        TC_LOG_DEBUG("spells", "No targets");
 
-    TC_LOG_INFO("spells", "target mask: %u", m_targetMask);
+    TC_LOG_DEBUG("spells", "target mask: %u", m_targetMask);
     if (m_targetMask & (TARGET_FLAG_UNIT_MASK | TARGET_FLAG_CORPSE_MASK | TARGET_FLAG_GAMEOBJECT_MASK))
-        TC_LOG_INFO("spells", "Object target: %s", m_objectTargetGUID.ToString().c_str());
+        TC_LOG_DEBUG("spells", "Object target: %s", m_objectTargetGUID.ToString().c_str());
     if (m_targetMask & TARGET_FLAG_ITEM)
-        TC_LOG_INFO("spells", "Item target: %s", m_itemTargetGUID.ToString().c_str());
+        TC_LOG_DEBUG("spells", "Item target: %s", m_itemTargetGUID.ToString().c_str());
     if (m_targetMask & TARGET_FLAG_TRADE_ITEM)
-        TC_LOG_INFO("spells", "Trade item target: %s", m_itemTargetGUID.ToString().c_str());
+        TC_LOG_DEBUG("spells", "Trade item target: %s", m_itemTargetGUID.ToString().c_str());
     if (m_targetMask & TARGET_FLAG_SOURCE_LOCATION)
-        TC_LOG_INFO("spells", "Source location: transport guid:%s trans offset: %s position: %s", m_src._transportGUID.ToString().c_str(), m_src._transportOffset.ToString().c_str(), m_src._position.ToString().c_str());
+        TC_LOG_DEBUG("spells", "Source location: transport guid:%s trans offset: %s position: %s", m_src._transportGUID.ToString().c_str(), m_src._transportOffset.ToString().c_str(), m_src._position.ToString().c_str());
     if (m_targetMask & TARGET_FLAG_DEST_LOCATION)
-        TC_LOG_INFO("spells", "Destination location: transport guid:%s trans offset: %s position: %s", m_dst._transportGUID.ToString().c_str(), m_dst._transportOffset.ToString().c_str(), m_dst._position.ToString().c_str());
+        TC_LOG_DEBUG("spells", "Destination location: transport guid:%s trans offset: %s position: %s", m_dst._transportGUID.ToString().c_str(), m_dst._transportOffset.ToString().c_str(), m_dst._position.ToString().c_str());
     if (m_targetMask & TARGET_FLAG_STRING)
-        TC_LOG_INFO("spells", "String: %s", m_strTarget.c_str());
-    TC_LOG_INFO("spells", "speed: %f", m_speed);
-    TC_LOG_INFO("spells", "pitch: %f", m_pitch);
+        TC_LOG_DEBUG("spells", "String: %s", m_strTarget.c_str());
+    TC_LOG_DEBUG("spells", "speed: %f", m_speed);
+    TC_LOG_DEBUG("spells", "pitch: %f", m_pitch);
 }
 
 SpellValue::SpellValue(Difficulty diff, SpellInfo const* proto)
@@ -4247,11 +4245,10 @@ void Spell::SendChannelUpdate(uint32 time)
         m_caster->SetUInt32Value(UNIT_CHANNEL_SPELL, 0);
     }
 
-    WorldPacket data(SMSG_CHANNEL_UPDATE, 8+4);
-    data << m_caster->GetPackGUID();
-    data << uint32(time);
-
-    m_caster->SendMessageToSet(&data, true);
+    WorldPackets::Spells::SpellChannelUpdate spellChannelUpdate;
+    spellChannelUpdate.CasterGUID = m_caster->GetGUID();
+    spellChannelUpdate.TimeRemaining = time;
+    m_caster->SendMessageToSet(spellChannelUpdate.Write(), true);
 }
 
 void Spell::SendChannelStart(uint32 duration)
@@ -4261,30 +4258,11 @@ void Spell::SendChannelStart(uint32 duration)
         if (m_UniqueTargetInfo.size() + m_UniqueGOTargetInfo.size() == 1)   // this is for TARGET_SELECT_CATEGORY_NEARBY
             channelTarget = !m_UniqueTargetInfo.empty() ? m_UniqueTargetInfo.front().targetGUID : m_UniqueGOTargetInfo.front().targetGUID;
 
-    WorldPacket data(SMSG_CHANNEL_START, (8+4+4));
-    data << m_caster->GetPackGUID();
-    data << uint32(m_spellInfo->Id);
-    data << uint32(duration);
-    data << uint8(0);                           // immunity (castflag & 0x04000000)
-    /*
-    if (immunity)
-    {
-        data << uint32();                       // CastSchoolImmunities
-        data << uint32();                       // CastImmunities
-    }
-    */
-    data << uint8(0);                           // healPrediction (castflag & 0x40000000)
-    /*
-    if (healPrediction)
-    {
-        data.appendPackGUID(channelTarget);     // target packguid
-        data << uint32();                       // spellid
-        data << uint8(0);                       // unk3
-        if (unk3 == 2)
-            data.append();                      // unk packed guid (unused ?)
-    }
-    */
-    m_caster->SendMessageToSet(&data, true);
+    WorldPackets::Spells::SpellChannelStart spellChannelStart;
+    spellChannelStart.CasterGUID = m_caster->GetGUID();
+    spellChannelStart.SpellID = m_spellInfo->Id;
+    spellChannelStart.ChannelDuration = duration;
+    m_caster->SendMessageToSet(spellChannelStart.Write(), true);
 
     m_timer = duration;
     if (!channelTarget.IsEmpty())
@@ -5543,9 +5521,7 @@ SpellCastResult Spell::CheckCast(bool strict)
         if (!my_trade)
             return SPELL_FAILED_NOT_TRADING;
 
-        // Item target guid contains trade slot until m_targets.UpdateTradeSlotItem() is called
-        TradeSlots slot = TradeSlots(m_targets.GetItemTargetGUID().GetRawValue().at(0));
-        if (slot != TRADE_SLOT_NONTRADED)
+        if (m_targets.GetItemTargetGUID() != ObjectGuid::TradeItem)
             return SPELL_FAILED_BAD_TARGETS;
 
         if (!IsTriggered())
@@ -6408,7 +6384,7 @@ void Spell::Delayed() // only called in DealDamage()
     else
         m_timer += delaytime;
 
-    TC_LOG_INFO("spells", "Spell %u partially interrupted for (%d) ms at damage", m_spellInfo->Id, delaytime);
+    TC_LOG_DEBUG("spells", "Spell %u partially interrupted for (%d) ms at damage", m_spellInfo->Id, delaytime);
 
     WorldPacket data(SMSG_SPELL_DELAYED, 8+4);
     data << m_caster->GetPackGUID();

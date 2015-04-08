@@ -47,27 +47,27 @@ void WorldSession::HandleChatMessageOpcode(WorldPackets::Chat::ChatMessage& pack
 
     switch (packet.GetOpcode())
     {
-        case CMSG_MESSAGECHAT_SAY:
+        case CMSG_CHAT_MESSAGE_SAY:
             type = CHAT_MSG_SAY;
             break;
-        case CMSG_MESSAGECHAT_YELL:
+        case CMSG_CHAT_MESSAGE_YELL:
             type = CHAT_MSG_YELL;
             break;
-        case CMSG_MESSAGECHAT_GUILD:
+        case CMSG_CHAT_MESSAGE_GUILD:
             type = CHAT_MSG_GUILD;
             break;
-        case CMSG_MESSAGECHAT_OFFICER:
+        case CMSG_CHAT_MESSAGE_OFFICER:
             type = CHAT_MSG_OFFICER;
             break;
-        /*case CMSG_MESSAGECHAT_PARTY:
+        case CMSG_CHAT_MESSAGE_PARTY:
             type = CHAT_MSG_PARTY;
             break;
-        case CMSG_MESSAGECHAT_RAID:
+        case CMSG_CHAT_MESSAGE_RAID:
             type = CHAT_MSG_RAID;
             break;
-        case CMSG_MESSAGECHAT_RAID_WARNING:
+        case CMSG_CHAT_MESSAGE_RAID_WARNING:
             type = CHAT_MSG_RAID_WARNING;
-            break;*/
+            break;
         default:
             TC_LOG_ERROR("network", "HandleMessagechatOpcode : Unknown chat opcode (%u)", packet.GetOpcode());
             return;
@@ -249,7 +249,7 @@ void WorldSession::HandleChatMessage(ChatMsg type, uint32 lang, std::string msg,
 
             if (GetPlayer()->GetTeam() != receiver->GetTeam() && !HasPermission(rbac::RBAC_PERM_TWO_SIDE_INTERACTION_CHAT) && !receiver->IsInWhisperWhiteList(sender->GetGUID()))
             {
-                SendWrongFactionNotice();
+                SendPlayerNotFoundNotice(target);
                 return;
             }
 
@@ -377,19 +377,19 @@ void WorldSession::HandleChatAddonMessageOpcode(WorldPackets::Chat::ChatAddonMes
     ChatMsg type;
 
     switch (packet.GetOpcode())
-    {/*
-        case CMSG_MESSAGECHAT_ADDON_GUILD:
+    {
+        case CMSG_CHAT_ADDON_MESSAGE_GUILD:
             type = CHAT_MSG_GUILD;
             break;
-        case CMSG_MESSAGECHAT_ADDON_OFFICER:
+        case CMSG_CHAT_ADDON_MESSAGE_OFFICER:
             type = CHAT_MSG_OFFICER;
             break;
-        case CMSG_MESSAGECHAT_ADDON_PARTY:
+        case CMSG_CHAT_ADDON_MESSAGE_PARTY:
             type = CHAT_MSG_PARTY;
             break;
-        case CMSG_MESSAGECHAT_ADDON_RAID:
+        case CMSG_CHAT_ADDON_MESSAGE_RAID:
             type = CHAT_MSG_RAID;
-            break;*/
+            break;
         default:
             TC_LOG_ERROR("network", "HandleChatAddonMessageOpcode: Unknown addon chat opcode (%u)", packet.GetOpcode());
             return;
@@ -524,13 +524,15 @@ void WorldSession::HandleChatMessageDNDOpcode(WorldPackets::Chat::ChatMessageDND
     sScriptMgr->OnPlayerChat(sender, CHAT_MSG_DND, LANG_UNIVERSAL, packet.Text);
 }
 
-void WorldSession::HandleEmoteOpcode(WorldPackets::Chat::EmoteClient& packet)
+void WorldSession::HandleEmoteOpcode(WorldPackets::Chat::EmoteClient& /* packet */)
 {
     if (!GetPlayer()->IsAlive() || GetPlayer()->HasUnitState(UNIT_STATE_DIED))
         return;
 
-    sScriptMgr->OnPlayerEmote(GetPlayer(), packet.EmoteID);
-    GetPlayer()->HandleEmoteCommand(packet.EmoteID);
+    sScriptMgr->OnPlayerClearEmote(GetPlayer());
+
+    if (_player->GetUInt32Value(UNIT_NPC_EMOTESTATE))
+        _player->SetUInt32Value(UNIT_NPC_EMOTESTATE, 0);
 }
 
 void WorldSession::HandleTextEmoteOpcode(WorldPackets::Chat::CTextEmote& packet)
@@ -626,7 +628,7 @@ void WorldSession::HandleChatIgnoredOpcode(WorldPacket& recvData)
 
 void WorldSession::SendPlayerNotFoundNotice(std::string const& name)
 {
-    WorldPacket data(SMSG_CHAT_PLAYER_NOT_FOUND, name.size()+1);
+    WorldPacket data(SMSG_CHAT_PLAYER_NOTFOUND, name.size()+1);
     data << name;
     SendPacket(&data);
 }
@@ -635,12 +637,6 @@ void WorldSession::SendPlayerAmbiguousNotice(std::string const& name)
 {
     WorldPacket data(SMSG_CHAT_PLAYER_AMBIGUOUS, name.size()+1);
     data << name;
-    SendPacket(&data);
-}
-
-void WorldSession::SendWrongFactionNotice()
-{
-    WorldPacket data(SMSG_CHAT_WRONG_FACTION, 0);
     SendPacket(&data);
 }
 

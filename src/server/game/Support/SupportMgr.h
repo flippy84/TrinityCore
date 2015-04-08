@@ -110,7 +110,7 @@ public:
     virtual void SetAssignedTo(ObjectGuid guid) { _assignedTo = guid; }
     virtual void SetAssignedTo(ObjectGuid /*guid*/, bool /*isAdmin*/) { }
     virtual void SetUnassigned() { _assignedTo.Clear(); }
-    void SetClosedBy(ObjectGuid value) { _closedBy = value; }    
+    void SetClosedBy(ObjectGuid value) { _closedBy = value; }
     void SetComment(std::string const& comment) { _comment = comment; }
     void SetPosition(uint32 mapId, G3D::Vector3& pos)
     {
@@ -137,7 +137,7 @@ protected:
     ObjectGuid _assignedTo;
     std::string _comment;
 };
-    
+
 
 class GmTicket : public Ticket
 {
@@ -206,7 +206,7 @@ public:
     BugTicket();
     BugTicket(Player* player);
     ~BugTicket();
-    
+
     std::string const& GetNote() const { return _note; }
 
     void SetFacing(float facing) { _facing = facing; }
@@ -404,11 +404,11 @@ private:
     uint32 _lastBugId;
     uint32 _lastComplaintId;
     uint32 _lastSuggestionId;
+    uint64 _lastChange;
     uint32 _openGmTicketCount;
     uint32 _openBugTicketCount;
     uint32 _openComplaintTicketCount;
     uint32 _openSuggestionTicketCount;
-    uint64 _lastChange;
 };
 
 #define sSupportMgr SupportMgr::instance()

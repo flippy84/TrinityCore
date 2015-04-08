@@ -442,7 +442,7 @@ void World::LoadConfigSettings(bool reload)
         sSupportMgr->SetSuggestionSystemStatus(m_bool_configs[CONFIG_SUPPORT_SUGGESTIONS_ENABLED]);
     }
     m_float_configs[CONFIG_CHANCE_OF_GM_SURVEY] = sConfigMgr->GetFloatDefault("Support.ChanceOfGMSurvey", 50.0f);
-    
+
 
     ///- Get string for new logins (newly created characters)
     SetNewCharString(sConfigMgr->GetStringDefault("PlayerStart.String", ""));
@@ -915,12 +915,12 @@ void World::LoadConfigSettings(bool reload)
     }
     m_int_configs[CONFIG_CURRENCY_CONQUEST_POINTS_ARENA_REWARD] *= 100;     //precision mod
 
-    m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL] = sConfigMgr->GetIntDefault("RecruitAFriend.MaxLevel", 60);
+    m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL] = sConfigMgr->GetIntDefault("RecruitAFriend.MaxLevel", 85);
     if (m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL] > m_int_configs[CONFIG_MAX_PLAYER_LEVEL])
     {
         TC_LOG_ERROR("server.loading", "RecruitAFriend.MaxLevel (%i) must be in the range 0..MaxLevel(%u). Set to %u.",
-            m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL], m_int_configs[CONFIG_MAX_PLAYER_LEVEL], 60);
-        m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL] = 60;
+            m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL], m_int_configs[CONFIG_MAX_PLAYER_LEVEL], 85);
+        m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL] = 85;
     }
 
     m_int_configs[CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL_DIFFERENCE] = sConfigMgr->GetIntDefault("RecruitAFriend.MaxDifference", 4);
@@ -1460,6 +1460,10 @@ void World::SetInitialWorldSettings()
     stmt->setUInt32(0, 3 * DAY);
     CharacterDatabase.Execute(stmt);
 
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_OLD_CORPSE_PHASES);
+    stmt->setUInt32(0, 3 * DAY);
+    CharacterDatabase.Execute(stmt);
+
     ///- Load the DBC files
     TC_LOG_INFO("server.loading", "Initialize data stores...");
     LoadDBCStores(m_dataPath);
@@ -1550,9 +1554,6 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Spell Group Stack Rules...");
     sSpellMgr->LoadSpellGroupStackRules();
 
-    TC_LOG_INFO("server.loading", "Loading Spell Phase Dbc Info...");
-    sObjectMgr->LoadPhaseInfo();
-
     TC_LOG_INFO("server.loading", "Loading NPC Texts...");
     sObjectMgr->LoadGossipText();
 
@@ -1618,6 +1619,15 @@ void World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Loading Gameobject Data...");
     sObjectMgr->LoadGameobjects();
+
+    TC_LOG_INFO("server.loading", "Loading GameObject Addon Data...");
+    sObjectMgr->LoadGameObjectAddons();                          // must be after LoadGameObjectTemplate() and LoadGameobjects()
+
+    TC_LOG_INFO("server.loading", "Loading GameObject Quest Items...");
+    sObjectMgr->LoadGameObjectQuestItems();
+
+    TC_LOG_INFO("server.loading", "Loading Creature Quest Items...");
+    sObjectMgr->LoadCreatureQuestItems();
 
     TC_LOG_INFO("server.loading", "Loading Creature Linked Respawn...");
     sObjectMgr->LoadLinkedRespawn();                             // must be after LoadCreatures(), LoadGameObjects()
@@ -1801,8 +1811,17 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading World States...");              // must be loaded before battleground, outdoor PvP and conditions
     LoadWorldStates();
 
-    TC_LOG_INFO("server.loading", "Loading Phase definitions...");
-    sObjectMgr->LoadPhaseDefinitions();
+    TC_LOG_INFO("server.loading", "Loading Terrain Phase definitions...");
+    sObjectMgr->LoadTerrainPhaseInfo();
+
+    TC_LOG_INFO("server.loading", "Loading Terrain Swap Default definitions...");
+    sObjectMgr->LoadTerrainSwapDefaults();
+
+    TC_LOG_INFO("server.loading", "Loading Terrain World Map definitions...");
+    sObjectMgr->LoadTerrainWorldMaps();
+
+    TC_LOG_INFO("server.loading", "Loading Phase Area definitions...");
+    sObjectMgr->LoadAreaPhases();
 
     TC_LOG_INFO("server.loading", "Loading Conditions...");
     sConditionMgr->LoadConditions();
@@ -1931,6 +1950,9 @@ void World::SetInitialWorldSettings()
     // Delete all custom channels which haven't been used for PreserveCustomChannelDuration days.
     Channel::CleanOldChannelsInDB();
 
+    TC_LOG_INFO("server.loading", "Initializing Opcodes...");
+    opcodeTable.Initialize();
+
     TC_LOG_INFO("server.loading", "Starting Arena Season...");
     sGameEventMgr->StartArenaSeason();
 
@@ -1987,9 +2009,6 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading realm names...");
     sObjectMgr->LoadRealmNames();
 
-    TC_LOG_INFO("misc", "Initializing Opcodes...");
-    opcodeTable.Initialize();
-
     uint32 startupDuration = GetMSTimeDiffToNow(startupBegin);
 
     TC_LOG_INFO("server.worldserver", "World initialized in %u minutes %u seconds", (startupDuration / 60000), ((startupDuration % 60000) / 1000));
@@ -1998,28 +2017,24 @@ void World::SetInitialWorldSettings()
         sLog->SetRealmId(realmId);
 }
 
-void World::RecordTimeDiff(const char *text, ...)
+void World::ResetTimeDiffRecord()
 {
     if (m_updateTimeCount != 1)
         return;
-    if (!text)
-    {
-        m_currentTime = getMSTime();
+
+    m_currentTime = getMSTime();
+}
+
+void World::RecordTimeDiff(std::string const& text)
+{
+    if (m_updateTimeCount != 1)
         return;
-    }
 
     uint32 thisTime = getMSTime();
     uint32 diff = getMSTimeDiff(m_currentTime, thisTime);
 
     if (diff > m_int_configs[CONFIG_MIN_LOG_UPDATE])
-    {
-        va_list ap;
-        char str[256];
-        va_start(ap, text);
-        vsnprintf(str, 256, text, ap);
-        va_end(ap);
-        TC_LOG_INFO("misc", "Difftime %s: %u.", str, diff);
-    }
+        TC_LOG_INFO("misc", "Difftime %s: %u.", text.c_str(), diff);
 
     m_currentTime = thisTime;
 }
@@ -2139,7 +2154,7 @@ void World::Update(uint32 diff)
     }
 
     /// <li> Handle session updates when the timer has passed
-    RecordTimeDiff(NULL);
+    ResetTimeDiffRecord();
     UpdateSessions(diff);
     RecordTimeDiff("UpdateSessions");
 
@@ -2186,7 +2201,7 @@ void World::Update(uint32 diff)
 
     /// <li> Handle all other objects
     ///- Update objects when the timer has passed (maps, transport, creatures, ...)
-    RecordTimeDiff(NULL);
+    ResetTimeDiffRecord();
     sMapMgr->Update(diff);
     RecordTimeDiff("UpdateMapMgr");
 
@@ -2746,7 +2761,7 @@ void World::ShutdownCancel()
 /// Send a server message to the user(s)
 void World::SendServerMessage(ServerMessageType type, const char *text, Player* player)
 {
-    WorldPacket data(SMSG_SERVER_MESSAGE, 50);              // guess size
+    WorldPacket data(SMSG_CHAT_SERVER_MESSAGE, 50);              // guess size
     data << uint32(type);
     if (type <= SERVER_MSG_STRING)
         data << text;

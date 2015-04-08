@@ -129,34 +129,6 @@ typedef std::map<uint32, PageText> PageTextContainer;
 // Benchmarked: Faster than std::map (insert/find)
 typedef std::unordered_map<uint16, InstanceTemplate> InstanceTemplateContainer;
 
-// Phasing (visibility)
-enum PhasingFlags
-{
-    PHASE_FLAG_OVERWRITE_EXISTING = 0x01,       // don't stack with existing phases, overwrites existing phases
-    PHASE_FLAG_NO_MORE_PHASES = 0x02,       // stop calculating phases after this phase was applied (no more phases will be applied)
-    PHASE_FLAG_NEGATE_PHASE = 0x04        // negate instead to add the phasemask
-};
-
-struct PhaseInfo
-{
-    uint32 phaseId;
-    uint32 worldMapAreaSwap;
-    uint32 terrainSwapMap;
-};
-
-typedef std::unordered_map<uint32, PhaseInfo> PhaseInfoContainer;
-
-struct PhaseDefinition
-{
-    uint32 zoneId;
-    uint32 entry;
-    uint32 phaseId;
-    uint32 phaseGroup;
-};
-
-typedef std::list<PhaseDefinition> PhaseDefinitionContainer;
-typedef std::unordered_map<uint32 /*zoneId*/, PhaseDefinitionContainer> PhaseDefinitionStore;
-
 struct GameTele
 {
     float  position_x;
@@ -574,26 +546,33 @@ typedef std::pair<GossipMenuItemsContainer::iterator, GossipMenuItemsContainer::
 
 struct QuestPOIPoint
 {
-    int32 x;
-    int32 y;
+    int32 X;
+    int32 Y;
 
-    QuestPOIPoint() : x(0), y(0) { }
-    QuestPOIPoint(int32 _x, int32 _y) : x(_x), y(_y) { }
+    QuestPOIPoint() : X(0), Y(0) { }
+    QuestPOIPoint(int32 _X, int32 _Y) : X(_X), Y(_Y) { }
 };
 
 struct QuestPOI
 {
-    uint32 Id;
+    int32 BlobIndex;
     int32 ObjectiveIndex;
-    uint32 MapId;
-    uint32 AreaId;
-    uint32 FloorId;
-    uint32 Unk3;
-    uint32 Unk4;
+    int32 QuestObjectiveID;
+    int32 QuestObjectID;
+    int32 MapID;
+    int32 WorldMapAreaID;
+    int32 Floor;
+    int32 Priority;
+    int32 Flags;
+    int32 WorldEffectID;
+    int32 PlayerConditionID;
+    int32 UnkWoD1;
     std::vector<QuestPOIPoint> points;
 
-    QuestPOI() : Id(0), ObjectiveIndex(0), MapId(0), AreaId(0), FloorId(0), Unk3(0), Unk4(0) { }
-    QuestPOI(uint32 id, int32 objIndex, uint32 mapId, uint32 areaId, uint32 floorId, uint32 unk3, uint32 unk4) : Id(id), ObjectiveIndex(objIndex), MapId(mapId), AreaId(areaId), FloorId(floorId), Unk3(unk3), Unk4(unk4) { }
+    QuestPOI() : BlobIndex(0), ObjectiveIndex(0), QuestObjectiveID(0), QuestObjectID(0), MapID(0), WorldMapAreaID(0), Floor(0), Priority(0), Flags(0), WorldEffectID(0), PlayerConditionID(0), UnkWoD1(0) { }
+    QuestPOI(int32 _BlobIndex, int32 _ObjectiveIndex, int32 _QuestObjectiveID, int32 _QuestObjectID, int32 _MapID, int32 _WorldMapAreaID, int32 _Foor, int32 _Priority, int32 _Flags, int32 _WorldEffectID, int32 _PlayerConditionID, int32 _UnkWoD1) :
+        BlobIndex(_BlobIndex), ObjectiveIndex(_ObjectiveIndex), QuestObjectiveID(_QuestObjectiveID), QuestObjectID(_QuestObjectID), MapID(_MapID), WorldMapAreaID(_WorldMapAreaID),
+        Floor(_Foor), Priority(_Priority), Flags(_Flags), WorldEffectID(_WorldEffectID), PlayerConditionID(_PlayerConditionID), UnkWoD1(_UnkWoD1) { }
 };
 
 typedef std::vector<QuestPOI> QuestPOIVector;
@@ -672,6 +651,9 @@ struct DungeonEncounter
 typedef std::list<DungeonEncounter const*> DungeonEncounterList;
 typedef std::unordered_map<uint64, DungeonEncounterList> DungeonEncounterContainer;
 
+typedef std::unordered_map<uint32, std::list<uint32>> TerrainPhaseInfo;
+typedef std::unordered_map<uint32, std::list<uint32>> PhaseInfo;
+
 class PlayerDumpReader;
 
 class ObjectMgr
@@ -726,6 +708,7 @@ class ObjectMgr
         static void ChooseCreatureFlags(CreatureTemplate const* cinfo, uint32& npcflag, uint32& unit_flags, uint32& dynamicflags, CreatureData const* data = NULL);
         EquipmentInfo const* GetEquipmentInfo(uint32 entry, int8& id);
         CreatureAddon const* GetCreatureAddon(ObjectGuid::LowType lowguid);
+        GameObjectAddon const* GetGameObjectAddon(ObjectGuid::LowType lowguid);
         CreatureAddon const* GetCreatureTemplateAddon(uint32 entry);
         ItemTemplate const* GetItemTemplate(uint32 entry);
         ItemTemplateContainer const* GetItemTemplateStore() const { return &_itemTemplateStore; }
@@ -741,6 +724,24 @@ class ObjectMgr
         void GetPlayerLevelInfo(uint32 race, uint32 class_, uint8 level, PlayerLevelInfo* info) const;
 
         static ObjectGuid GetPlayerGUIDByName(std::string const& name);
+
+        GameObjectQuestItemList* GetGameObjectQuestItemList(uint32 id)
+        {
+            GameObjectQuestItemMap::iterator itr = _gameObjectQuestItemStore.find(id);
+            if (itr != _gameObjectQuestItemStore.end())
+                return &itr->second;
+            return NULL;
+        }
+        GameObjectQuestItemMap const* GetGameObjectQuestItemMap() const { return &_gameObjectQuestItemStore; }
+
+        CreatureQuestItemList* GetCreatureQuestItemList(uint32 id)
+        {
+            CreatureQuestItemMap::iterator itr = _creatureQuestItemStore.find(id);
+            if (itr != _creatureQuestItemStore.end())
+                return &itr->second;
+            return NULL;
+        }
+        CreatureQuestItemMap const* GetCreatureQuestItemMap() const { return &_creatureQuestItemStore; }
 
         /**
         * Retrieves the player name by guid.
@@ -857,9 +858,9 @@ class ObjectMgr
             return NULL;
         }
 
-        QuestPOIVector const* GetQuestPOIVector(uint32 questId)
+        QuestPOIVector const* GetQuestPOIVector(int32 QuestID)
         {
-            QuestPOIContainer::const_iterator itr = _questPOIStore.find(questId);
+            QuestPOIContainer::const_iterator itr = _questPOIStore.find(QuestID);
             if (itr != _questPOIStore.end())
                 return &itr->second;
             return NULL;
@@ -947,11 +948,14 @@ class ObjectMgr
         void LoadCreatureTemplateAddons();
         void LoadCreatureTemplate(Field* fields);
         void CheckCreatureTemplate(CreatureTemplate const* cInfo);
+        void LoadGameObjectQuestItems();
+        void LoadCreatureQuestItems();
         void LoadTempSummons();
         void LoadCreatures();
         void LoadLinkedRespawn();
         bool SetCreatureLinkedRespawn(ObjectGuid::LowType guid, ObjectGuid::LowType linkedGuid);
         void LoadCreatureAddons();
+        void LoadGameObjectAddons();
         void LoadCreatureModelInfo();
         void LoadEquipmentTemplates();
         void LoadGameObjectLocales();
@@ -1008,8 +1012,10 @@ class ObjectMgr
         void LoadTrainerSpell();
         void AddSpellToTrainer(uint32 entry, uint32 spell, uint32 spellCost, uint32 reqSkill, uint32 reqSkillValue, uint32 reqLevel);
 
-        void LoadPhaseDefinitions();
-        void LoadPhaseInfo();
+        void LoadTerrainPhaseInfo();
+        void LoadTerrainSwapDefaults();
+        void LoadTerrainWorldMaps();
+        void LoadAreaPhases();
 
         std::string GeneratePetName(uint32 entry);
         uint32 GetBaseXP(uint8 level);
@@ -1243,7 +1249,12 @@ class ObjectMgr
             return _gossipMenuItemsStore.equal_range(uiMenuId);
         }
 
-        PhaseInfo const* GetPhaseInfo(uint32 phase) { return _PhaseInfoStore.find(phase) != _PhaseInfoStore.end() ? &_PhaseInfoStore[phase] : nullptr; }
+        std::list<uint32>& GetPhaseTerrainSwaps(uint32 phaseid) { return _terrainPhaseInfoStore[phaseid]; }
+        std::list<uint32>& GetDefaultTerrainSwaps(uint32 mapid) { return _terrainMapDefaultStore[mapid]; }
+        std::list<uint32>& GetTerrainWorldMaps(uint32 terrainId) { return _terrainWorldMapStore[terrainId]; }
+        TerrainPhaseInfo& GetDefaultTerrainSwapStore() { return _terrainMapDefaultStore; }
+        std::list<uint32>& GetPhasesForArea(uint32 area) { return _phases[area]; }
+        PhaseInfo& GetAreaPhases() { return _phases; }
 
         // for wintergrasp only
         GraveYardContainer GraveYardStore;
@@ -1369,8 +1380,10 @@ class ObjectMgr
         PageTextContainer _pageTextStore;
         InstanceTemplateContainer _instanceTemplateStore;
 
-        PhaseDefinitionStore _PhaseDefinitionStore;
-        PhaseInfoContainer _PhaseInfoStore;
+        TerrainPhaseInfo _terrainPhaseInfoStore;
+        TerrainPhaseInfo _terrainMapDefaultStore;
+        TerrainPhaseInfo _terrainWorldMapStore;
+        PhaseInfo _phases;
 
     private:
         void LoadScripts(ScriptsType type);
@@ -1407,6 +1420,9 @@ class ObjectMgr
         CreatureTemplateContainer _creatureTemplateStore;
         CreatureModelContainer _creatureModelStore;
         CreatureAddonContainer _creatureAddonStore;
+        GameObjectAddonContainer _gameObjectAddonStore;
+        GameObjectQuestItemMap _gameObjectQuestItemStore;
+        CreatureQuestItemMap _creatureQuestItemStore;
         CreatureTemplateAddonContainer _creatureTemplateAddonStore;
         EquipmentInfoContainer _equipmentInfoStore;
         LinkedRespawnContainer _linkedRespawnStore;

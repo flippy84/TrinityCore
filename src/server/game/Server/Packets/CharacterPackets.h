@@ -30,7 +30,7 @@ namespace WorldPackets
         public:
             EnumCharacters(WorldPacket&& packet) : ClientPacket(std::move(packet))
             {
-                ASSERT(GetOpcode() == CMSG_CHAR_ENUM || GetOpcode() == CMSG_CHAR_UNDELETE_ENUM);
+                ASSERT(GetOpcode() == CMSG_ENUM_CHARACTERS || GetOpcode() == CMSG_ENUM_CHARACTERS_DELETED_BY_CLIENT);
             }
 
             void Read() override { }
@@ -162,7 +162,7 @@ namespace WorldPackets
                 uint8 Race = 0;
             };
 
-            EnumCharactersResult() : ServerPacket(SMSG_CHAR_ENUM) { }
+            EnumCharactersResult() : ServerPacket(SMSG_ENUM_CHARACTERS_RESULT) { }
 
             WorldPacket const* Write() override;
 
@@ -173,10 +173,10 @@ namespace WorldPackets
             std::list<RestrictedFactionChangeRuleInfo> FactionChangeRestrictions; ///< @todo: research
         };
 
-        class CreateChar final : public ClientPacket
+        class CreateCharacter final : public ClientPacket
         {
         public:
-            CreateChar(WorldPacket&& packet) : ClientPacket(CMSG_CHAR_CREATE, std::move(packet)) { }
+            CreateCharacter(WorldPacket&& packet) : ClientPacket(CMSG_CREATE_CHARACTER, std::move(packet)) { }
 
             void Read() override;
 
@@ -196,30 +196,30 @@ namespace WorldPackets
             std::shared_ptr<CharacterCreateInfo> CreateInfo;
         };
 
-        class CharacterCreateResponse final : public ServerPacket
+        class CreateChar final : public ServerPacket
         {
         public:
-            CharacterCreateResponse() : ServerPacket(SMSG_CHAR_CREATE, 1) { }
+            CreateChar() : ServerPacket(SMSG_CREATE_CHAR, 1) { }
 
             WorldPacket const* Write() override;
 
             uint8 Code = 0; ///< Result code @see enum ResponseCodes
         };
 
-        class DeleteChar final : public ClientPacket
+        class CharDelete final : public ClientPacket
         {
         public:
-            DeleteChar(WorldPacket&& packet): ClientPacket(CMSG_CHAR_DELETE, std::move(packet)) { }
+            CharDelete(WorldPacket&& packet): ClientPacket(CMSG_CHAR_DELETE, std::move(packet)) { }
 
             void Read() override;
 
             ObjectGuid Guid; ///< Guid of the character to delete
         };
 
-        class CharacterDeleteResponse final : public ServerPacket
+        class DeleteChar final : public ServerPacket
         {
         public:
-            CharacterDeleteResponse(): ServerPacket(SMSG_CHAR_DELETE, 1) { }
+            DeleteChar(): ServerPacket(SMSG_DELETE_CHAR, 1) { }
 
             WorldPacket const* Write() override;
 
@@ -229,7 +229,7 @@ namespace WorldPackets
         class CharacterRenameRequest final : public ClientPacket
         {
         public:
-            CharacterRenameRequest(WorldPacket&& packet) : ClientPacket(CMSG_CHAR_RENAME, std::move(packet)) { }
+            CharacterRenameRequest(WorldPacket&& packet) : ClientPacket(CMSG_CHARACTER_RENAME_REQUEST, std::move(packet)) { }
 
             void Read() override;
 
@@ -243,7 +243,7 @@ namespace WorldPackets
         class CharacterRenameResult final : public ServerPacket
         {
         public:
-            CharacterRenameResult() : ServerPacket(SMSG_CHAR_RENAME, 20) { }
+            CharacterRenameResult() : ServerPacket(SMSG_CHARACTER_RENAME_RESULT, 20) { }
 
             WorldPacket const* Write() override;
 
@@ -311,7 +311,7 @@ namespace WorldPackets
                 uint8 RaceID            = RACE_NONE;
             };
 
-            CharFactionChangeResult() : ServerPacket(SMSG_CHAR_FACTION_CHANGE, 20 + sizeof(CharFactionChangeDisplayInfo)) { }
+            CharFactionChangeResult() : ServerPacket(SMSG_CHAR_FACTION_CHANGE_RESULT, 20 + sizeof(CharFactionChangeDisplayInfo)) { }
 
             WorldPacket const* Write() override;
 
@@ -323,7 +323,7 @@ namespace WorldPackets
         class GenerateRandomCharacterName final : public ClientPacket
         {
         public:
-            GenerateRandomCharacterName(WorldPacket&& packet) : ClientPacket(CMSG_RANDOMIZE_CHAR_NAME, std::move(packet)) { }
+            GenerateRandomCharacterName(WorldPacket&& packet) : ClientPacket(CMSG_GENERATE_RANDOM_CHARACTER_NAME, std::move(packet)) { }
 
             void Read() override;
 
@@ -334,7 +334,7 @@ namespace WorldPackets
         class GenerateRandomCharacterNameResult final : public ServerPacket
         {
         public:
-            GenerateRandomCharacterNameResult() : ServerPacket(SMSG_RANDOMIZE_CHAR_NAME, 20) { }
+            GenerateRandomCharacterNameResult() : ServerPacket(SMSG_GENERATE_RANDOM_CHARACTER_NAME_RESULT, 20) { }
 
             WorldPacket const* Write() override;
 
@@ -387,10 +387,10 @@ namespace WorldPackets
             uint32 Result = 0; ///< @see enum CharacterUndeleteResult
         };
 
-        class GetUndeleteCooldownStatus final : public ClientPacket
+        class GetUndeleteCharacterCooldownStatus final : public ClientPacket
         {
         public:
-            GetUndeleteCooldownStatus(WorldPacket&& packet) : ClientPacket(CMSG_GET_UNDELETE_COOLDOWN_STATUS, std::move(packet)) { }
+            GetUndeleteCharacterCooldownStatus(WorldPacket&& packet) : ClientPacket(CMSG_GET_UNDELETE_CHARACTER_COOLDOWN_STATUS, std::move(packet)) { }
 
             void Read() override { }
         };
@@ -504,7 +504,7 @@ namespace WorldPackets
         class LoadingScreenNotify final : public ClientPacket
         {
         public:
-            LoadingScreenNotify(WorldPacket&& packet) : ClientPacket(CMSG_LOAD_SCREEN, std::move(packet)) { }
+            LoadingScreenNotify(WorldPacket&& packet) : ClientPacket(CMSG_LOADING_SCREEN_NOTIFY, std::move(packet)) { }
 
             void Read() override;
 
@@ -515,34 +515,30 @@ namespace WorldPackets
         class InitialSetup final : public ServerPacket
         {
         public:
-            InitialSetup() : ServerPacket(SMSG_INITIAL_SETUP, 1 + 1 + 4 + QUESTS_COMPLETED_BITS_SIZE + 4)
-            {
-                QuestsCompleted.reserve(QUESTS_COMPLETED_BITS_SIZE);
-            }
+            InitialSetup() : ServerPacket(SMSG_INITIAL_SETUP, 1 + 1 + 4 + 4) { }
 
             WorldPacket const* Write() override;
 
             uint8 ServerExpansionTier = 0;
             uint8 ServerExpansionLevel = 0;
             time_t RaidOrigin = time_t(1135753200); // 28/12/2005 07:00:00
-            std::vector<uint8> QuestsCompleted;
             int32 ServerRegionID = 3;   // Cfg_Regions.dbc, EU
         };
 
         class SetActionBarToggles final : public ClientPacket
         {
         public:
-            SetActionBarToggles(WorldPacket&& packet) : ClientPacket(CMSG_SET_ACTIONBAR_TOGGLES, std::move(packet)) { }
+            SetActionBarToggles(WorldPacket&& packet) : ClientPacket(CMSG_SET_ACTION_BAR_TOGGLES, std::move(packet)) { }
 
             void Read() override;
 
             uint8 Mask = 0;
         };
 
-        class PlayedTimeClient final : public ClientPacket
+        class RequestPlayedTime final : public ClientPacket
         {
         public:
-            PlayedTimeClient(WorldPacket&& packet) : ClientPacket(CMSG_PLAYED_TIME, std::move(packet)) { }
+            RequestPlayedTime(WorldPacket&& packet) : ClientPacket(CMSG_REQUEST_PLAYED_TIME, std::move(packet)) { }
 
             void Read() override;
 
@@ -579,6 +575,40 @@ namespace WorldPackets
             void Read() override;
 
             bool ShowHelm = false;
+        };
+
+        class SetTitle final : public ClientPacket
+        {
+        public:
+            SetTitle(WorldPacket&& packet) : ClientPacket(CMSG_SET_TITLE, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 TitleID = 0;
+        };
+
+        class AlterApperance final : public ClientPacket
+        {
+        public:
+            AlterApperance(WorldPacket&& packet) : ClientPacket(CMSG_ALTER_APPEARANCE, std::move(packet)) { }
+
+            void Read() override;
+
+            uint32 NewHairStyle = 0;
+            uint32 NewHairColor = 0;
+            uint32 NewFacialHair = 0;
+            uint32 NewSkinColor = 0;
+            uint32 Unk = 0;
+        };
+
+        class BarberShopResultServer final : public ServerPacket
+        {
+        public:
+            BarberShopResultServer() : ServerPacket(SMSG_BARBER_SHOP_RESULT, 4) { }
+
+            WorldPacket const* Write() override;
+
+            BarberShopResult Result;
         };
     }
 }

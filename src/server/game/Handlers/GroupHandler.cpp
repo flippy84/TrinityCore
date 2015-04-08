@@ -33,6 +33,8 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "SpellAuraEffects.h"
+#include "MiscPackets.h"
+#include "LootPackets.h"
 
 class Aura;
 
@@ -598,22 +600,15 @@ void WorldSession::HandleLootMethodOpcode(WorldPacket& recvData)
     group->SendUpdate();
 }
 
-void WorldSession::HandleLootRoll(WorldPacket& recvData)
+void WorldSession::HandleLootRoll(WorldPackets::Loot::LootRoll& packet)
 {
-    ObjectGuid guid;
-    uint32 itemSlot;
-    uint8  rollType;
-    recvData >> guid;                  // guid of the item rolled
-    recvData >> itemSlot;
-    recvData >> rollType;              // 0: pass, 1: need, 2: greed
-
     Group* group = GetPlayer()->GetGroup();
     if (!group)
         return;
 
-    group->CountRollVote(GetPlayer()->GetGUID(), guid, rollType);
+    group->CountRollVote(GetPlayer()->GetGUID(), packet.LootObj, packet.RollType);
 
-    switch (rollType)
+    switch (packet.RollType)
     {
         case ROLL_NEED:
             GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_NEED, 1);
@@ -648,13 +643,13 @@ void WorldSession::HandleMinimapPingOpcode(WorldPacket& recvData)
     GetPlayer()->GetGroup()->BroadcastPacket(&data, true, -1, GetPlayer()->GetGUID());
 }
 
-void WorldSession::HandleRandomRollOpcode(WorldPacket& recvData)
+void WorldSession::HandleRandomRollOpcode(WorldPackets::Misc::RandomRollClient& packet)
 {
     TC_LOG_DEBUG("network", "WORLD: Received CMSG_RANDOM_ROLL");
 
     uint32 minimum, maximum, roll;
-    recvData >> minimum;
-    recvData >> maximum;
+    minimum = packet.Min;
+    maximum = packet.Max;
 
     /** error handling **/
     if (minimum > maximum || maximum > 10000)                // < 32768 for urand call
@@ -666,15 +661,16 @@ void WorldSession::HandleRandomRollOpcode(WorldPacket& recvData)
 
     //TC_LOG_DEBUG("misc", "ROLL: MIN: %u, MAX: %u, ROLL: %u", minimum, maximum, roll);
 
-    WorldPacket data(SMSG_RANDOM_ROLL, 4+4+4+8);
-    data << uint32(minimum);
-    data << uint32(maximum);
-    data << uint32(roll);
-    data << GetPlayer()->GetGUID();
+    WorldPackets::Misc::RandomRoll randomRoll;
+    randomRoll.Min = minimum;
+    randomRoll.Max = maximum;
+    randomRoll.Result = roll;
+    randomRoll.Roller = GetPlayer()->GetGUID();
+    randomRoll.RollerWowAccount = GetAccountGUID();
     if (GetPlayer()->GetGroup())
-        GetPlayer()->GetGroup()->BroadcastPacket(&data, false);
+        GetPlayer()->GetGroup()->BroadcastPacket(randomRoll.Write(), false);
     else
-        SendPacket(&data);
+        SendPacket(randomRoll.Write());
 }
 
 void WorldSession::HandleRaidTargetUpdateOpcode(WorldPacket& recvData)
@@ -749,11 +745,7 @@ void WorldSession::HandleGroupRequestJoinUpdates(WorldPacket& /*recvData*/)
     if (!group)
         return;
 
-    WorldPacket data(SMSG_REAL_GROUP_UPDATE, 1 + 4 + 8);
-    data << uint8(group->GetGroupType());
-    data << uint32(group->GetMembersCount() - 1);
-    data << group->GetLeaderGUID();
-    SendPacket(&data);
+    // does some stuff. dunno what.
 }
 
 void WorldSession::HandleGroupChangeSubGroupOpcode(WorldPacket& recvData)
@@ -907,7 +899,7 @@ void WorldSession::BuildPartyMemberStatsChangedPacket(Player* player, WorldPacke
     if (mask & GROUP_UPDATE_FLAG_PET_POWER_TYPE)            // same for pets
         mask |= (GROUP_UPDATE_FLAG_PET_CUR_POWER | GROUP_UPDATE_FLAG_PET_MAX_POWER);
 
-    data->Initialize(SMSG_PARTY_MEMBER_STATS, 80);          // average value
+    data->Initialize(SMSG_PARTY_MEMBER_STATE, 80);          // average value
     *data << player->GetPackGUID();
     *data << uint32(mask);
 
@@ -1140,7 +1132,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recvData)
     Player* player = ObjectAccessor::FindConnectedPlayer(Guid);
     if (!player)
     {
-        WorldPacket data(SMSG_PARTY_MEMBER_STATS_FULL, 3+4+2);
+        WorldPacket data(SMSG_PARTY_MEMBER_STATE, 3 + 4 + 2);
         data << uint8(0);                                   // only for SMSG_PARTY_MEMBER_STATS_FULL, probably arena/bg related
         data << Guid.WriteAsPacked();
         data << uint32(GROUP_UPDATE_FLAG_STATUS);
@@ -1153,7 +1145,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recvData)
     Powers powerType = player->getPowerType();
     std::set<uint32> const& phases = player->GetPhases();
 
-    WorldPacket data(SMSG_PARTY_MEMBER_STATS_FULL, 4+2+2+2+1+2*6+8+1+8);
+    WorldPacket data(SMSG_PARTY_MEMBER_STATE, 4 + 2 + 2 + 2 + 1 + 2 * 6 + 8 + 1 + 8);
     data << uint8(0);                                       // only for SMSG_PARTY_MEMBER_STATS_FULL, probably arena/bg related
     data << player->GetPackGUID();
 

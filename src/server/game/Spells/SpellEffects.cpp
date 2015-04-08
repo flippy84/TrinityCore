@@ -67,6 +67,7 @@
 #include "GuildMgr.h"
 #include "ReputationMgr.h"
 #include "AreaTrigger.h"
+#include "DuelPackets.h"
 #include "MiscPackets.h"
 #include "SpellPackets.h"
 
@@ -241,7 +242,7 @@ pEffect SpellEffects[TOTAL_SPELL_EFFECTS]=
     &Spell::EffectGiveCurrency,                             //166 SPELL_EFFECT_GIVE_CURRENCY
     &Spell::EffectNULL,                                     //167 SPELL_EFFECT_167
     &Spell::EffectNULL,                                     //168 SPELL_EFFECT_ALLOW_CONTROL_PET
-    &Spell::EffectNULL,                                     //169 SPELL_EFFECT_DESTROY_ITEM
+    &Spell::EffectDestroyItem,                              //169 SPELL_EFFECT_DESTROY_ITEM
     &Spell::EffectNULL,                                     //170 SPELL_EFFECT_UPDATE_ZONE_AURAS_AND_PHASES
     &Spell::EffectNULL,                                     //171 SPELL_EFFECT_171
     &Spell::EffectResurrectWithAura,                        //172 SPELL_EFFECT_RESURRECT_WITH_AURA
@@ -317,6 +318,12 @@ pEffect SpellEffects[TOTAL_SPELL_EFFECTS]=
     &Spell::EffectNULL,                                     //242 SPELL_EFFECT_242
     &Spell::EffectNULL,                                     //243 SPELL_EFFECT_243
     &Spell::EffectNULL,                                     //244 SPELL_EFFECT_244
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_245
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_246
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_247
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_248
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_249
+    &Spell::EffectNULL,                                     //244 SPELL_EFFECT_250
 };
 
 void Spell::EffectNULL(SpellEffIndex /*effIndex*/)
@@ -2334,7 +2341,7 @@ void Spell::EffectDispel(SpellEffIndex effIndex)
     if (success_list.empty())
         return;
 
-    WorldPacket dataSuccess(SMSG_SPELL_DISPEL_LOG, 8+8+4+1+4+success_list.size()*5);
+    WorldPacket dataSuccess(SMSG_SPELL_DISPELL_LOG, 8 + 8 + 4 + 1 + 4 + success_list.size() * 5);
     // Send packet header
     dataSuccess << unitTarget->GetPackGUID();         // Victim GUID
     dataSuccess << m_caster->GetPackGUID();           // Caster GUID
@@ -3212,8 +3219,7 @@ void Spell::EffectSummonObjectWild(SpellEffIndex effIndex)
         return;
     }
 
-    for (auto phase : m_caster->GetPhases())
-        pGameObj->SetInPhase(phase, false, true);
+    pGameObj->CopyPhaseFrom(m_caster);
 
     int32 duration = m_spellInfo->GetDuration();
 
@@ -3236,8 +3242,7 @@ void Spell::EffectSummonObjectWild(SpellEffIndex effIndex)
         if (linkedGO->Create(sObjectMgr->GetGenerator<HighGuid::GameObject>()->Generate(), linkedEntry, map,
             m_caster->GetPhaseMask(), x, y, z, target->GetOrientation(), 0.0f, 0.0f, 0.0f, 0.0f, 100, GO_STATE_READY))
         {
-            for (auto phase : m_caster->GetPhases())
-                linkedGO->SetInPhase(phase, false, true);
+            linkedGO->CopyPhaseFrom(m_caster);
 
             linkedGO->SetRespawnTime(duration > 0 ? duration/IN_MILLISECONDS : 0);
             linkedGO->SetSpellId(m_spellInfo->Id);
@@ -3871,8 +3876,7 @@ void Spell::EffectDuel(SpellEffIndex effIndex)
         return;
     }
 
-    for (auto phase : m_caster->GetPhases())
-        pGameObj->SetInPhase(phase, false, true);
+    pGameObj->CopyPhaseFrom(m_caster);
 
     pGameObj->SetUInt32Value(GAMEOBJECT_FACTION, m_caster->getFaction());
     pGameObj->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel()+1);
@@ -3887,11 +3891,14 @@ void Spell::EffectDuel(SpellEffIndex effIndex)
     //END
 
     // Send request
-    WorldPacket data(SMSG_DUEL_REQUESTED, 8 + 8);
-    data << pGameObj->GetGUID();
-    data << caster->GetGUID();
-    caster->GetSession()->SendPacket(&data);
-    target->GetSession()->SendPacket(&data);
+    WorldPackets::Duel::DuelRequested packet;
+    packet.ArbiterGUID = pGameObj->GetGUID();
+    packet.RequestedByGUID = caster->GetGUID();
+    packet.RequestedByWowAccount = caster->GetSession()->GetAccountGUID();
+
+    WorldPacket const* worldPacket = packet.Write();
+    caster->GetSession()->SendPacket(worldPacket);
+    target->GetSession()->SendPacket(worldPacket);
 
     // create duel-info
     DuelInfo* duel   = new DuelInfo;
@@ -3929,7 +3936,7 @@ void Spell::EffectStuck(SpellEffIndex /*effIndex*/)
         return;
 
     TC_LOG_DEBUG("spells", "Spell Effect: Stuck");
-    TC_LOG_INFO("spells", "Player %s (%s) used auto-unstuck future at map %u (%f, %f, %f)", player->GetName().c_str(), player->GetGUID().ToString().c_str(), player->GetMapId(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ());
+    TC_LOG_DEBUG("spells", "Player %s (%s) used auto-unstuck future at map %u (%f, %f, %f)", player->GetName().c_str(), player->GetGUID().ToString().c_str(), player->GetMapId(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ());
 
     if (player->IsInFlight())
         return;
@@ -4244,8 +4251,7 @@ void Spell::EffectSummonObject(SpellEffIndex effIndex)
         return;
     }
 
-    for (auto phase : m_caster->GetPhases())
-        go->SetInPhase(phase, false, true);
+    go->CopyPhaseFrom(m_caster);
 
     //pGameObj->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel());
     int32 duration = m_spellInfo->GetDuration();
@@ -4882,8 +4888,7 @@ void Spell::EffectTransmitted(SpellEffIndex effIndex)
         return;
     }
 
-    for (auto phase : m_caster->GetPhases())
-        pGameObj->SetInPhase(phase, false, true);
+    pGameObj->CopyPhaseFrom(m_caster);
 
     int32 duration = m_spellInfo->GetDuration();
 
@@ -4947,8 +4952,7 @@ void Spell::EffectTransmitted(SpellEffIndex effIndex)
         if (linkedGO->Create(sObjectMgr->GetGenerator<HighGuid::GameObject>()->Generate(), linkedEntry, cMap,
             0, fx, fy, fz, m_caster->GetOrientation(), 0.0f, 0.0f, 0.0f, 0.0f, 100, GO_STATE_READY))
         {
-            for (auto phase : m_caster->GetPhases())
-                linkedGO->SetInPhase(phase, false, true);
+            linkedGO->CopyPhaseFrom(m_caster);
 
             linkedGO->SetRespawnTime(duration > 0 ? duration/IN_MILLISECONDS : 0);
             //linkedGO->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel());
@@ -5154,7 +5158,7 @@ void Spell::EffectStealBeneficialBuff(SpellEffIndex /*effIndex*/)
     if (success_list.empty())
         return;
 
-    WorldPacket dataSuccess(SMSG_SPELLSTEALLOG, 8+8+4+1+4+damage*5);
+    WorldPacket dataSuccess(SMSG_SPELL_DISPELL_LOG, 8 + 8 + 4 + 1 + 4 + damage * 5);
     dataSuccess << unitTarget->GetPackGUID();  // Victim GUID
     dataSuccess << m_caster->GetPackGUID();    // Caster GUID
     dataSuccess << uint32(m_spellInfo->Id);         // dispel spell id
@@ -5781,4 +5785,19 @@ void Spell::EffectRemoveTalent(SpellEffIndex /*effIndex*/)
 
     player->RemoveTalent(talent);
     player->SendTalentsInfoData();
+}
+
+void Spell::EffectDestroyItem(SpellEffIndex effIndex)
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+        return;
+
+    Player* player = unitTarget->ToPlayer();
+    SpellEffectInfo const* effect = GetEffect(effIndex);
+    uint32 itemId = effect->ItemType;
+    if (Item* item = player->GetItemByEntry(itemId))
+        player->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
 }

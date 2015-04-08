@@ -30,8 +30,6 @@ class GameObjectAI;
 class Group;
 class Transport;
 
-#define MAX_GAMEOBJECT_QUEST_ITEMS 6
-
 // from `gameobject_template`
 struct GameObjectTemplate
 {
@@ -45,7 +43,6 @@ struct GameObjectTemplate
     uint32  faction;
     uint32  flags;
     float   size;
-    uint32  questItems[MAX_GAMEOBJECT_QUEST_ITEMS];
     int32   unkInt32;
     union
     {
@@ -470,6 +467,7 @@ struct GameObjectTemplate
         {
             uint32 chairheight;                             // 0 chairheight, int, Min value: 0, Max value: 2, Default value: 1
             int32 HeightOffset;                             // 1 Height Offset (inches), int, Min value: -100, Max value: 100, Default value: 0
+            uint32 SitAnimKit;                              // 2 Sit Anim Kit, References: AnimKit, NoValue = 0
         } barberChair;
         // 33 GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING
         struct
@@ -587,6 +585,8 @@ struct GameObjectTemplate
         {
             int32 mapID;                                    // 0 mapID, References: Map, NoValue = -1
             int32 namedset;                                 // 1 named set, int, Min value: -2147483648, Max value: 2147483647, Default value: 0
+            uint32 Primarydoodadset;                        // 2 Primary doodad set, int, Min value: -2147483648, Max value: 2147483647, Default value: 0
+            uint32 Secondarydoodadset;                      // 3 Secondary doodad set, int, Min value: -2147483648, Max value: 2147483647, Default value: 0
         } phaseableMO;
         // 44 GAMEOBJECT_TYPE_GARRISON_MONUMENT
         struct
@@ -795,6 +795,15 @@ struct GameObjectLocale
     StringVector CastBarCaption;
 };
 
+// `gameobject_addon` table
+struct GameObjectAddon
+{
+    InvisibilityType invisibilityType;
+    uint32 InvisibilityValue;
+};
+
+typedef std::unordered_map<ObjectGuid::LowType, GameObjectAddon> GameObjectAddonContainer;
+
 // client side GO show states
 enum GOState
 {
@@ -834,6 +843,9 @@ struct GameObjectData
     uint32 phaseGroup;
     bool dbData;
 };
+
+typedef std::vector<uint32> GameObjectQuestItemList;
+typedef std::unordered_map<uint32, GameObjectQuestItemList> GameObjectQuestItemMap;
 
 // For containers:  [GO_NOT_READY]->GO_READY (close)->GO_ACTIVATED (open) ->GO_JUST_DEACTIVATED->GO_READY        -> ...
 // For bobber:      GO_NOT_READY  ->GO_READY (close)->GO_ACTIVATED (open) ->GO_JUST_DEACTIVATED-><deleted>
@@ -949,7 +961,7 @@ class GameObject : public WorldObject, public GridObject<GameObject>, public Map
         void SetGoAnimProgress(uint8 animprogress) { SetByteValue(GAMEOBJECT_BYTES_1, 3, animprogress); }
         static void SetGoArtKit(uint8 artkit, GameObject* go, ObjectGuid::LowType lowguid = UI64LIT(0));
 
-        void SetInPhase(uint32 id, bool update, bool apply);
+        bool SetInPhase(uint32 id, bool update, bool apply) override;
         void EnableCollision(bool enable);
 
         void Use(Unit* user);

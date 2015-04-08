@@ -152,7 +152,7 @@ WorldPacket const* WorldPackets::Chat::Chat::Write()
     _worldPacket.WriteBits(Prefix.length(), 5);
     _worldPacket.WriteBits(_Channel.length(), 7);
     _worldPacket.WriteBits(ChatText.length(), 12);
-    _worldPacket.WriteBits(_ChatFlags, 10);
+    _worldPacket.WriteBits(_ChatFlags, 11);
     _worldPacket.WriteBit(HideChatLog);
     _worldPacket.WriteBit(FakeSenderName);
     _worldPacket.WriteString(SenderName);
@@ -195,9 +195,4 @@ WorldPacket const* WorldPackets::Chat::PrintNotification::Write()
     _worldPacket.WriteBits(NotifyText.size(), 12);
     _worldPacket.WriteString(NotifyText);
     return &_worldPacket;
-}
-
-void WorldPackets::Chat::EmoteClient::Read()
-{
-    _worldPacket >> EmoteID;
 }

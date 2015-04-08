@@ -25,6 +25,7 @@
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "GroupMgr.h"
+#include "MiscPackets.h"
 #include "ObjectMgr.h"
 #include "OutdoorPvPMgr.h"
 #include "PoolMgr.h"
@@ -295,6 +296,16 @@ bool GameObject::Create(ObjectGuid::LowType guidlow, uint32 name_id, Map* map, u
             SetGoAnimProgress(animprogress);
             break;
     }
+
+    if (GameObjectAddon const* addon = sObjectMgr->GetGameObjectAddon(guidlow))
+    {
+        if (addon->InvisibilityValue)
+        {
+            m_invisibility.AddFlag(addon->invisibilityType);
+            m_invisibility.AddValue(addon->invisibilityType, addon->InvisibilityValue);
+        }
+    }
+
     LastUsedScriptID = GetGOInfo()->ScriptId;
     AIM_Initialize();
 
@@ -818,7 +829,6 @@ void GameObject::SaveToDB(uint32 mapid, uint32 spawnMask, uint32 phaseMask)
     stmt->setUInt32(index++, GetEntry());
     stmt->setUInt16(index++, uint16(mapid));
     stmt->setUInt8(index++, spawnMask);
-    stmt->setUInt32(index++, GetPhaseMask());
     stmt->setFloat(index++, GetPositionX());
     stmt->setFloat(index++, GetPositionY());
     stmt->setFloat(index++, GetPositionZ());
@@ -1361,7 +1371,7 @@ void GameObject::Use(Unit* user)
             {
                 if (info->goober.pageID)                    // show page...
                 {
-                    WorldPacket data(SMSG_GAMEOBJECT_PAGETEXT, 8);
+                    WorldPacket data(SMSG_PAGE_TEXT, 8);
                     data << GetGUID();
                     player->SendDirectMessage(&data);
                 }
@@ -1770,8 +1780,8 @@ void GameObject::Use(Unit* user)
             // fallback, will always work
             player->TeleportTo(GetMapId(), GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), TELE_TO_NOT_LEAVE_TRANSPORT | TELE_TO_NOT_LEAVE_COMBAT | TELE_TO_NOT_UNSUMMON_PET);
 
-            WorldPacket data(SMSG_ENABLE_BARBER_SHOP, 0);
-            player->SendDirectMessage(&data);
+            WorldPackets::Misc::EnableBarberShop packet;
+            player->SendDirectMessage(packet.Write());
 
             player->SetStandState(UnitStandStateType(UNIT_STAND_STATE_SIT_LOW_CHAIR + info->barberChair.chairheight));
             return;
@@ -1848,7 +1858,7 @@ void GameObject::CastSpell(Unit* target, uint32 spellId, bool triggered /*= true
 
 void GameObject::SendCustomAnim(uint32 anim)
 {
-    WorldPacket data(SMSG_GAMEOBJECT_CUSTOM_ANIM, 8+4);
+    WorldPacket data(SMSG_GAME_OBJECT_CUSTOM_ANIM, 8 + 4);
     data << GetGUID();
     data << uint32(anim);
     SendMessageToSet(&data, true);
@@ -2163,11 +2173,13 @@ void GameObject::SetDisplayId(uint32 displayid)
     UpdateModel();
 }
 
-void GameObject::SetInPhase(uint32 id, bool update, bool apply)
+bool GameObject::SetInPhase(uint32 id, bool update, bool apply)
 {
-    WorldObject::SetInPhase(id, update, apply);
+    bool res = WorldObject::SetInPhase(id, update, apply);
     if (m_model && m_model->isEnabled())
         EnableCollision(true);
+
+    return res;
 }
 
 void GameObject::EnableCollision(bool enable)

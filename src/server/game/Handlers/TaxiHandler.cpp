@@ -56,7 +56,7 @@ void WorldSession::SendTaxiStatus(ObjectGuid guid)
 
     TC_LOG_DEBUG("network", "WORLD: current location %u ", curloc);
 
-    WorldPacket data(SMSG_TAXINODE_STATUS, 9);
+    WorldPacket data(SMSG_TAXI_NODE_STATUS, 9);
     data << guid;
     data << uint8(GetPlayer()->m_taxi.IsTaximaskNodeKnown(curloc) ? 1 : 0);
     SendPacket(&data);
@@ -143,7 +143,7 @@ bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
         WorldPacket msg(SMSG_NEW_TAXI_PATH, 0);
         SendPacket(&msg);
 
-        WorldPacket update(SMSG_TAXINODE_STATUS, 9);
+        WorldPacket update(SMSG_TAXI_NODE_STATUS, 9);
         update << unit->GetGUID();
         update << uint8(1);
         SendPacket(&update);
@@ -210,7 +210,7 @@ void WorldSession::HandleMoveSplineDoneOpcode(WorldPacket& recvData)
     recvData.read_skip<uint32>();                          // unk
 
     MovementInfo movementInfo;                              // used only for proper packet read
-    _player->ReadMovementInfo(recvData, &movementInfo);
+    _player->ValidateMovementInfo(&movementInfo);
 
     // in taxi flight packet received in 2 case:
     // 1) end taxi path in far (multi-node) flight

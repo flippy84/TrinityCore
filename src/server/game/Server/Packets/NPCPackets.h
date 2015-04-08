@@ -59,7 +59,7 @@ namespace WorldPackets
             int32 QuestLevel    = 0;
             bool Repeatable     = false;
             std::string QuestTitle;
-            int32 QuestFlags[2];
+            int32 QuestFlags[2] = { };
         };
 
         class GossipMessage final : public ServerPacket
@@ -115,7 +115,7 @@ namespace WorldPackets
         class VendorInventory final : public ServerPacket
         {
         public:
-            VendorInventory() : ServerPacket(SMSG_LIST_INVENTORY, 600) { }
+            VendorInventory() : ServerPacket(SMSG_VENDOR_INVENTORY, 600) { }
 
             WorldPacket const* Write() override;
 
@@ -130,7 +130,7 @@ namespace WorldPackets
             int32 MoneyCost     = 0;
             int32 ReqSkillLine  = 0;
             int32 ReqSkillRank  = 0;
-            int32 ReqAbility[MAX_TRAINERSPELL_ABILITY_REQS];
+            int32 ReqAbility[MAX_TRAINERSPELL_ABILITY_REQS] = { };
             uint8 Usable        = 0;
             uint8 ReqLevel      = 0;
         };
@@ -162,11 +162,22 @@ namespace WorldPackets
         class PlayerTabardVendorActivate final : public ServerPacket
         {
         public:
-            PlayerTabardVendorActivate() : ServerPacket(SMSG_TABARD_VENDOR_ACTIVATE, 16) { }
+            PlayerTabardVendorActivate() : ServerPacket(SMSG_PLAYER_TABARD_VENDOR_ACTIVATE, 16) { }
 
             WorldPacket const* Write() override;
 
             ObjectGuid Vendor;
+        };
+
+        class SuppressNPCGreetings final : public ServerPacket
+        {
+        public:
+            SuppressNPCGreetings() : ServerPacket(SMSG_SUPPRESS_NPC_GREETINGS, 16 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid UnitGUID;
+            bool SuppressNPCGreeting = false;
         };
     }
 }

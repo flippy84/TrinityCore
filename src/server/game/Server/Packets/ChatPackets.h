@@ -28,13 +28,13 @@ namespace WorldPackets
 {
     namespace Chat
     {
-        // CMSG_MESSAGECHAT_GUILD
-        // CMSG_MESSAGECHAT_OFFICER
-        // CMSG_MESSAGECHAT_YELL
-        // CMSG_MESSAGECHAT_SAY
-        // CMSG_MESSAGECHAT_PARTY
-        // CMSG_MESSAGECHAT_RAID
-        // CMSG_MESSAGECHAT_RAID_WARNING
+        // CMSG_CHAT_MESSAGE_GUILD
+        // CMSG_CHAT_MESSAGE_OFFICER
+        // CMSG_CHAT_MESSAGE_YELL
+        // CMSG_CHAT_MESSAGE_SAY
+        // CMSG_CHAT_MESSAGE_PARTY
+        // CMSG_CHAT_MESSAGE_RAID
+        // CMSG_CHAT_MESSAGE_RAID_WARNING
         class ChatMessage final : public ClientPacket
         {
         public:
@@ -46,7 +46,7 @@ namespace WorldPackets
             int32 Language = LANG_UNIVERSAL;
         };
 
-        // CMSG_MESSAGECHAT_WHISPER
+        // CMSG_CHAT_MESSAGE_WHISPER
         class ChatMessageWhisper final : public ClientPacket
         {
         public:
@@ -59,7 +59,7 @@ namespace WorldPackets
             std::string Target;
         };
 
-        // CMSG_MESSAGECHAT_CHANNEL
+        // CMSG_CHAT_MESSAGE_CHANNEL
         class ChatMessageChannel final : public ClientPacket
         {
         public:
@@ -72,10 +72,10 @@ namespace WorldPackets
             std::string Target;
         };
 
-        // CMSG_MESSAGECHAT_ADDON_GUILD
-        // CMSG_MESSAGECHAT_ADDON_OFFICER
-        // CMSG_MESSAGECHAT_ADDON_PARTY
-        // CMSG_MESSAGECHAT_ADDON_RAID
+        // CMSG_CHAT_ADDON_MESSAGE_GUILD
+        // CMSG_CHAT_ADDON_MESSAGE_OFFICER
+        // CMSG_CHAT_ADDON_MESSAGE_PARTY
+        // CMSG_CHAT_ADDON_MESSAGE_RAID
         class ChatAddonMessage final : public ClientPacket
         {
         public:
@@ -87,7 +87,7 @@ namespace WorldPackets
             std::string Text;
         };
 
-        // CMSG_MESSAGECHAT_ADDON_WHISPER
+        // CMSG_CHAT_ADDON_MESSAGE_WHISPER
         class ChatAddonMessageWhisper final : public ClientPacket
         {
         public:
@@ -103,7 +103,7 @@ namespace WorldPackets
         class ChatMessageDND final : public ClientPacket
         {
         public:
-            ChatMessageDND(WorldPacket&& packet) : ClientPacket(CMSG_MESSAGECHAT_DND, std::move(packet)) { }
+            ChatMessageDND(WorldPacket&& packet) : ClientPacket(CMSG_CHAT_MESSAGE_DND, std::move(packet)) { }
 
             void Read() override;
 
@@ -113,7 +113,7 @@ namespace WorldPackets
         class ChatMessageAFK final : public ClientPacket
         {
         public:
-            ChatMessageAFK(WorldPacket&& packet) : ClientPacket(CMSG_MESSAGECHAT_AFK, std::move(packet)) { }
+            ChatMessageAFK(WorldPacket&& packet) : ClientPacket(CMSG_CHAT_MESSAGE_AFK, std::move(packet)) { }
 
             void Read() override;
 
@@ -123,18 +123,18 @@ namespace WorldPackets
         class ChatMessageEmote final : public ClientPacket
         {
         public:
-            ChatMessageEmote(WorldPacket&& packet) : ClientPacket(CMSG_MESSAGECHAT_EMOTE, std::move(packet)) { }
+            ChatMessageEmote(WorldPacket&& packet) : ClientPacket(CMSG_CHAT_MESSAGE_EMOTE, std::move(packet)) { }
 
             void Read() override;
 
             std::string Text;
         };
 
-        // SMSG_MESSAGECHAT
+        // SMSG_CHAT
         class Chat final : public ServerPacket
         {
         public:
-            Chat() : ServerPacket(SMSG_MESSAGECHAT, 100) { }
+            Chat() : ServerPacket(SMSG_CHAT, 100) { }
 
             void Initalize(ChatMsg chatType, Language language, WorldObject const* sender, WorldObject const* receiver, std::string message, uint32 achievementId = 0, std::string channelName = "", LocaleConstant locale = DEFAULT_LOCALE, std::string addonPrefix = "");
             WorldPacket const* Write() override;
@@ -174,7 +174,7 @@ namespace WorldPackets
         class CTextEmote final : public ClientPacket
         {
         public:
-            CTextEmote(WorldPacket&& packet) : ClientPacket(CMSG_TEXT_EMOTE, std::move(packet)) { }
+            CTextEmote(WorldPacket&& packet) : ClientPacket(CMSG_SEND_TEXT_EMOTE, std::move(packet)) { }
 
             void Read() override;
 
@@ -200,8 +200,7 @@ namespace WorldPackets
         class PrintNotification final : public ServerPacket
         {
         public:
-            PrintNotification() : ServerPacket(SMSG_NOTIFICATION, 3) { }
-            PrintNotification(std::string const& notifyText) : ServerPacket(SMSG_NOTIFICATION, 3), NotifyText(notifyText) { }
+            PrintNotification(std::string const& notifyText) : ServerPacket(SMSG_PRINT_NOTIFICATION, 2 + notifyText.size()), NotifyText(notifyText) { }
 
             WorldPacket const* Write() override;
 
@@ -213,9 +212,7 @@ namespace WorldPackets
         public:
             EmoteClient(WorldPacket&& packet) : ClientPacket(CMSG_EMOTE, std::move(packet)) { }
 
-            void Read() override;
-
-            uint32 EmoteID = 0;
+            void Read() override { }
         };
     }
 }

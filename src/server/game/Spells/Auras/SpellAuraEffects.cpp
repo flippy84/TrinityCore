@@ -539,6 +539,11 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS]=
     &AuraEffect::HandleNULL,                                      //476
     &AuraEffect::HandleNULL,                                      //477
     &AuraEffect::HandleNULL,                                      //478
+    &AuraEffect::HandleNULL,                                      //479
+    &AuraEffect::HandleNULL,                                      //480
+    &AuraEffect::HandleNULL,                                      //481
+    &AuraEffect::HandleNULL,                                      //482
+    &AuraEffect::HandleNULL,                                      //483
 };
 
 AuraEffect::AuraEffect(Aura* base, uint32 effIndex, int32 *baseAmount, Unit* caster) :
@@ -1733,7 +1738,7 @@ void AuraEffect::HandlePhase(AuraApplication const* aurApp, uint8 mode, bool app
     {
         if (player->IsInWorld())
             player->GetMap()->SendUpdateTransportVisibility(player, oldPhases);
-        player->UpdatePhasing();
+        player->SendUpdatePhasing();
     }
 
     // need triggering visibility update base at phase update of not GM invisible (other GMs anyway see in any phases)
@@ -1765,7 +1770,7 @@ void AuraEffect::HandlePhaseGroup(AuraApplication const* aurApp, uint8 mode, boo
     {
         if (player->IsInWorld())
             player->GetMap()->SendUpdateTransportVisibility(player, oldPhases);
-        player->UpdatePhasing();
+        player->SendUpdatePhasing();
     }
 
     // need triggering visibility update base at phase update of not GM invisible (other GMs anyway see in any phases)
@@ -5409,11 +5414,6 @@ void AuraEffect::HandleAuraSetVehicle(AuraApplication const* aurApp, uint8 mode,
 
     if (target->GetTypeId() != TYPEID_PLAYER)
         return;
-
-    WorldPacket data(SMSG_PLAYER_VEHICLE_DATA, target->GetPackGUID().size()+4);
-    data << target->GetPackGUID();
-    data << uint32(apply ? vehicleId : 0);
-    target->SendMessageToSet(&data, true);
 
     if (apply)
         target->ToPlayer()->SendOnCancelExpectedVehicleRideAura();

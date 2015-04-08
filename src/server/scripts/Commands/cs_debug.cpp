@@ -33,6 +33,7 @@ EndScriptData */
 #include "GossipDef.h"
 #include "Transport.h"
 #include "Language.h"
+#include "MovementPackets.h"
 
 #include <fstream>
 
@@ -934,8 +935,7 @@ public:
             return false;
         }
 
-        for (auto phase : handler->GetSession()->GetPlayer()->GetPhases())
-            v->SetInPhase(phase, false, true);
+        v->CopyPhaseFrom(handler->GetSession()->GetPlayer());
 
         map->AddToMap(v->ToCreature());
 
@@ -959,6 +959,7 @@ public:
 
         char* t = strtok((char*)args, " ");
         char* p = strtok(NULL, " ");
+        char* m = strtok(NULL, " ");
 
         if (!t)
             return false;
@@ -967,10 +968,16 @@ public:
         std::set<uint32> phaseId;
         std::set<uint32> worldMapSwap;
 
-        terrainswap.insert((uint32)atoi(t));
+        if (uint32 ut = (uint32)atoi(t))
+            terrainswap.insert(ut);
 
         if (p)
-            phaseId.insert((uint32)atoi(p));
+            if (uint32 up = (uint32)atoi(p))
+                phaseId.insert(up);
+
+        if (m)
+            if (uint32 um = (uint32)atoi(m))
+                worldMapSwap.insert(um);
 
         handler->GetSession()->SendSetPhaseShift(phaseId, terrainswap, worldMapSwap);
         return true;
@@ -1343,9 +1350,9 @@ public:
                 target->DestroyForNearbyPlayers();  // Force new SMSG_UPDATE_OBJECT:CreateObject
             else
             {
-                WorldPacket data(SMSG_MOVE_UPDATE);
-                target->WriteMovementInfo(data);
-                target->SendMessageToSet(&data, true);
+                WorldPackets::Movement::MoveUpdate moveUpdate;
+                moveUpdate.movementInfo = &target->m_movementInfo;
+                target->SendMessageToSet(moveUpdate.Write(), true);
             }
 
             handler->PSendSysMessage(LANG_MOVEFLAGS_SET, target->GetUnitMovementFlags(), target->GetExtraUnitMovementFlags());
@@ -1390,14 +1397,36 @@ public:
         return true;
     }
 
-    static bool HandleDebugPhaseCommand(ChatHandler* /*handler*/, char const* /*args*/)
+    static bool HandleDebugPhaseCommand(ChatHandler* handler, char const* /*args*/)
     {
-        /*/
-        Unit* unit = handler->getSelectedUnit();
-        Player* player = handler->GetSession()->GetPlayer();
-        if (unit && unit->GetTypeId() == TYPEID_PLAYER)
-            player = unit->ToPlayer();
-        */
+        Unit* target = handler->getSelectedUnit();
+
+        if (!target)
+        {
+            handler->SendSysMessage(LANG_SELECT_CREATURE);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (target->GetTypeId() == TYPEID_UNIT)
+        {
+            if (target->ToCreature()->GetDBPhase() > 0)
+                handler->PSendSysMessage("Target creature's PhaseId in DB: %d", target->ToCreature()->GetDBPhase());
+            else if (target->ToCreature()->GetDBPhase() < 0)
+                handler->PSendSysMessage("Target creature's PhaseGroup in DB: %d", abs(target->ToCreature()->GetDBPhase()));
+        }
+
+        std::stringstream phases;
+
+        for (uint32 phase : target->GetPhases())
+        {
+            phases << phase << " ";
+        }
+
+        if (!phases.str().empty())
+            handler->PSendSysMessage("Target's current phases: %s", phases.str().c_str());
+        else
+            handler->SendSysMessage("Target is not phased");
         return true;
     }
 };

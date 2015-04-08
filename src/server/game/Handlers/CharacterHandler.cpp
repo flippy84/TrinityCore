@@ -257,6 +257,20 @@ void WorldSession::HandleCharEnum(PreparedQueryResult result)
 
             TC_LOG_INFO("network", "Loading char guid %s from account %u.", charInfo.Guid.ToString().c_str(), GetAccountId());
 
+            if (!Player::ValidateAppearance(charInfo.Race, charInfo.Class, charInfo.Sex, charInfo.HairStyle, charInfo.HairColor, charInfo.Face, charInfo.FacialHair, charInfo.Skin))
+            {
+                TC_LOG_ERROR("entities.player.loading", "Player %s has wrong Appearance values (Hair/Skin/Color), forcing recustomize", charInfo.Guid.ToString().c_str());
+
+                if (!(charInfo.CustomizationFlag == CHAR_CUSTOMIZE_FLAG_CUSTOMIZE))
+                {
+                    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ADD_AT_LOGIN_FLAG);
+                    stmt->setUInt16(0, uint16(AT_LOGIN_CUSTOMIZE));
+                    stmt->setUInt64(1, charInfo.Guid.GetCounter());
+                    CharacterDatabase.Execute(stmt);
+                    charInfo.CustomizationFlag = CHAR_CUSTOMIZE_FLAG_CUSTOMIZE;
+                }
+            }
+
             // Do not allow locked characters to login
             if (!(charInfo.Flags & (CHARACTER_FLAG_LOCKED_FOR_TRANSFER | CHARACTER_FLAG_LOCKED_BY_BILLING)))
                 _legitCharacters.insert(charInfo.Guid);
@@ -334,7 +348,7 @@ void WorldSession::HandleCharUndeleteEnumOpcode(WorldPackets::Character::EnumCha
     _charEnumCallback.SetFutureResult(CharacterDatabase.AsyncQuery(stmt));
 }
 
-void WorldSession::HandleCharCreateOpcode(WorldPackets::Character::CreateChar& charCreate)
+void WorldSession::HandleCharCreateOpcode(WorldPackets::Character::CreateCharacter& charCreate)
 {
     if (!HasPermission(rbac::RBAC_PERM_SKIP_CHECK_CHARACTER_CREATION_TEAMMASK))
     {
@@ -702,7 +716,7 @@ void WorldSession::HandleCharCreateCallback(PreparedQueryResult result, WorldPac
     }
 }
 
-void WorldSession::HandleCharDeleteOpcode(WorldPackets::Character::DeleteChar& charDelete)
+void WorldSession::HandleCharDeleteOpcode(WorldPackets::Character::CharDelete& charDelete)
 {
     // Initiating
     uint32 initAccountId = GetAccountId();
@@ -921,9 +935,9 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         pCurrChar->SetGuildLevel(0);
     }
 
-    WorldPacket data(SMSG_LEARNED_DANCE_MOVES, 4+4);
-    data << uint64(0);
-    SendPacket(&data);
+    //WorldPacket data(SMSG_LEARNED_DANCE_MOVES, 4+4);
+    //data << uint64(0);
+    //SendPacket(&data);
 
     WorldPackets::Query::HotfixNotifyBlob hotfixInfo;
     hotfixInfo.Hotfixes = sDB2Manager.GetHotfixData();
@@ -1038,6 +1052,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
     if (pCurrChar->HasAtLoginFlag(AT_LOGIN_RESET_TALENTS))
     {
         pCurrChar->ResetTalents(true);
+        pCurrChar->ResetTalentSpecialization();
         pCurrChar->SendTalentsInfoData(); // original talents send already in to SendInitialPacketsBeforeAddToMap, resend reset state
         SendNotification(LANG_RESET_TALENTS);
     }
@@ -1089,7 +1104,7 @@ void WorldSession::SendFeatureSystemStatus()
     features.ScrollOfResurrectionRequestsRemaining = 1;
     features.ScrollOfResurrectionMaxRequestsPerDay = 1;
     features.UnkInt27 = 60;
-    features.UnkInt29 = 20;
+    features.TwitterMsTillCanPost = 20;
     features.CfgRealmID = 2;
     features.CfgRealmRecID = 0;
     features.VoiceEnabled = false;
@@ -1365,26 +1380,26 @@ void WorldSession::HandleSetPlayerDeclinedNames(WorldPacket& recvData)
     SendSetPlayerDeclinedNamesResult(DECLINED_NAMES_RESULT_SUCCESS, guid);
 }
 
-void WorldSession::HandleAlterAppearance(WorldPacket& recvData)
+void WorldSession::HandleAlterAppearance(WorldPackets::Character::AlterApperance& packet)
 {
     TC_LOG_DEBUG("network", "CMSG_ALTER_APPEARANCE");
 
-    uint32 Hair, Color, FacialHair, SkinColor;
-    recvData >> Hair >> Color >> FacialHair >> SkinColor;
-
-    BarberShopStyleEntry const* bs_hair = sBarberShopStyleStore.LookupEntry(Hair);
+    BarberShopStyleEntry const* bs_hair = sBarberShopStyleStore.LookupEntry(packet.NewHairStyle);
 
     if (!bs_hair || bs_hair->Type != 0 || bs_hair->Race != _player->getRace() || bs_hair->Sex != _player->getGender())
         return;
 
-    BarberShopStyleEntry const* bs_facialHair = sBarberShopStyleStore.LookupEntry(FacialHair);
+    BarberShopStyleEntry const* bs_facialHair = sBarberShopStyleStore.LookupEntry(packet.NewFacialHair);
 
     if (!bs_facialHair || bs_facialHair->Type != 2 || bs_facialHair->Race != _player->getRace() || bs_facialHair->Sex != _player->getGender())
         return;
 
-    BarberShopStyleEntry const* bs_skinColor = sBarberShopStyleStore.LookupEntry(SkinColor);
+    BarberShopStyleEntry const* bs_skinColor = sBarberShopStyleStore.LookupEntry(packet.NewSkinColor);
 
     if (bs_skinColor && (bs_skinColor->Type != 3 || bs_skinColor->Race != _player->getRace() || bs_skinColor->Sex != _player->getGender()))
+        return;
+
+    if (!Player::ValidateAppearance(_player->getRace(), _player->getClass(), _player->getGender(), bs_hair->ID, packet.NewHairColor, uint8(_player->GetUInt32Value(PLAYER_FLAGS) >> 8), bs_facialHair->ID, bs_skinColor ? bs_skinColor->ID : 0))
         return;
 
     GameObject* go = _player->FindNearestGameObjectOfType(GAMEOBJECT_TYPE_BARBER_CHAIR, 5.0f);
@@ -1394,13 +1409,13 @@ void WorldSession::HandleAlterAppearance(WorldPacket& recvData)
         return;
     }
 
-    if (_player->GetStandState() != UNIT_STAND_STATE_SIT_LOW_CHAIR + go->GetGOInfo()->barberChair.chairheight)
+    if (_player->GetStandState() != UnitStandStateType(UNIT_STAND_STATE_SIT_LOW_CHAIR + go->GetGOInfo()->barberChair.chairheight))
     {
         SendBarberShopResult(BARBER_SHOP_RESULT_NOT_ON_CHAIR);
         return;
     }
 
-    uint32 cost = _player->GetBarberShopCost(bs_hair->Data, Color, bs_facialHair->Data, bs_skinColor);
+    uint32 cost = _player->GetBarberShopCost(bs_hair->Data, packet.NewHairColor, bs_facialHair->Data, bs_skinColor);
 
     // 0 - ok
     // 1, 3 - not enough money
@@ -1417,7 +1432,7 @@ void WorldSession::HandleAlterAppearance(WorldPacket& recvData)
     _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_SPENT_AT_BARBER, cost);
 
     _player->SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_STYLE_ID, uint8(bs_hair->Data));
-    _player->SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_COLOR_ID, uint8(Color));
+    _player->SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_COLOR_ID, uint8(packet.NewHairColor));
     _player->SetByteValue(PLAYER_BYTES_2, PLAYER_BYTES_2_OFFSET_FACIAL_STYLE, uint8(bs_facialHair->Data));
     if (bs_skinColor)
         _player->SetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID, uint8(bs_skinColor->Data));
@@ -1479,8 +1494,17 @@ void WorldSession::HandleCharCustomizeCallback(PreparedQueryResult result, World
     Field* fields = result->Fetch();
 
     std::string oldName = fields[0].GetString();
-    uint16 atLoginFlags = fields[1].GetUInt16();
-    uint32 playerBytes2 = fields[2].GetUInt32();
+    uint8 plrRace = fields[1].GetUInt8();
+    uint8 plrClass = fields[2].GetUInt8();
+    uint8 plrGender = fields[3].GetUInt8();
+    uint16 atLoginFlags = fields[4].GetUInt16();
+    uint32 playerBytes2 = fields[5].GetUInt32();
+
+    if (!Player::ValidateAppearance(plrRace, plrClass, plrGender, customizeInfo->HairStyleID, customizeInfo->HairColorID, customizeInfo->FaceID, customizeInfo->FacialHairStyleID, customizeInfo->SkinID, true))
+    {
+        SendCharCustomize(CHAR_CREATE_ERROR, customizeInfo);
+        return;
+    }
 
     if (!(atLoginFlags & AT_LOGIN_CUSTOMIZE))
     {
@@ -2315,7 +2339,7 @@ void WorldSession::HandleOpeningCinematic(WorldPacket& /*recvData*/)
     }
 }
 
-void WorldSession::HandleGetUndeleteCooldownStatus(WorldPackets::Character::GetUndeleteCooldownStatus& /*getCooldown*/)
+void WorldSession::HandleGetUndeleteCooldownStatus(WorldPackets::Character::GetUndeleteCharacterCooldownStatus& /*getCooldown*/)
 {
     /// empty result to force wait
     PreparedQueryResultPromise result;
@@ -2491,7 +2515,7 @@ void WorldSession::HandleCharUndeleteCallback(PreparedQueryResult result, WorldP
 
 void WorldSession::SendCharCreate(ResponseCodes result)
 {
-    WorldPackets::Character::CharacterCreateResponse response;
+    WorldPackets::Character::CreateChar response;
     response.Code = result;
 
     SendPacket(response.Write());
@@ -2499,7 +2523,7 @@ void WorldSession::SendCharCreate(ResponseCodes result)
 
 void WorldSession::SendCharDelete(ResponseCodes result)
 {
-    WorldPackets::Character::CharacterDeleteResponse response;
+    WorldPackets::Character::DeleteChar response;
     response.Code = result;
 
     SendPacket(response.Write());
@@ -2572,9 +2596,9 @@ void WorldSession::SendSetPlayerDeclinedNamesResult(DeclinedNameResult result, O
 
 void WorldSession::SendBarberShopResult(BarberShopResult result)
 {
-    WorldPacket data(SMSG_BARBER_SHOP_RESULT, 4);
-    data << uint32(result);
-    SendPacket(&data);
+    WorldPackets::Character::BarberShopResultServer packet;
+    packet.Result = result;
+    SendPacket(packet.Write());
 }
 
 void WorldSession::SendUndeleteCooldownStatusResponse(uint32 currentCooldown, uint32 maxCooldown)

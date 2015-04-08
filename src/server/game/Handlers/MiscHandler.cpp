@@ -63,7 +63,7 @@
 #include "AchievementPackets.h"
 #include "WhoPackets.h"
 
-void WorldSession::HandleRepopRequest(WorldPackets::Misc::RepopRequest& packet)
+void WorldSession::HandleRepopRequest(WorldPackets::Misc::RepopRequest& /*packet*/)
 {
     TC_LOG_DEBUG("network", "WORLD: Recvd CMSG_REPOP_REQUEST Message");
 
@@ -457,19 +457,6 @@ void WorldSession::HandleTogglePvP(WorldPacket& recvData)
     //    pvp->HandlePlayerActivityChanged(_player);
 }
 
-void WorldSession::HandleZoneUpdateOpcode(WorldPacket& recvData)
-{
-    uint32 newZone;
-    recvData >> newZone;
-
-    TC_LOG_DEBUG("network", "WORLD: Recvd ZONE_UPDATE: %u", newZone);
-
-    // use server side data, but only after update the player position. See Player::UpdatePosition().
-    GetPlayer()->SetNeedsZoneUpdate(true);
-
-    //GetPlayer()->SendInitWorldStates(true, newZone);
-}
-
 void WorldSession::HandlePortGraveyard(WorldPackets::Misc::PortGraveyard& /*packet*/)
 {
     if (GetPlayer()->IsAlive() || !GetPlayer()->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
@@ -545,7 +532,7 @@ void WorldSession::HandleBugReportOpcode(WorldPacket& recvData)
     CharacterDatabase.Execute(stmt);
 }
 
-void WorldSession::HandleReclaimCorpse(WorldPackets::Misc::ReclaimCorpse& packet)
+void WorldSession::HandleReclaimCorpse(WorldPackets::Misc::ReclaimCorpse& /*packet*/)
 {
     TC_LOG_DEBUG("network", "WORLD: Received CMSG_RECLAIM_CORPSE");
 
@@ -596,23 +583,6 @@ void WorldSession::HandleResurrectResponse(WorldPackets::Misc::ResurrectResponse
         return;
 
     GetPlayer()->ResurrectUsingRequestData();
-}
-
-void WorldSession::SendAreaTriggerMessage(const char* Text, ...)
-{
-    va_list ap;
-    char szStr [1024];
-    szStr[0] = '\0';
-
-    va_start(ap, Text);
-    vsnprintf(szStr, 1024, Text, ap);
-    va_end(ap);
-
-    uint32 length = strlen(szStr)+1;
-    WorldPacket data(SMSG_AREA_TRIGGER_MESSAGE, 4+length);
-    data << length;
-    data << szStr;
-    SendPacket(&data);
 }
 
 void WorldSession::HandleAreaTriggerOpcode(WorldPackets::Misc::AreaTrigger& packet)
@@ -822,13 +792,6 @@ void WorldSession::HandleRequestAccountData(WorldPackets::ClientConfig::RequestA
     SendPacket(data.Write());
 }
 
-int32 WorldSession::HandleEnableNagleAlgorithm()
-{
-    // Instructs the server we wish to receive few amounts of large packets (SMSG_MULTIPLE_PACKETS?)
-    // instead of large amount of small packets
-    return 0;
-}
-
 void WorldSession::HandleSetActionButtonOpcode(WorldPackets::Spells::SetActionButton& packet)
 {
     uint32 action = ACTION_BUTTON_ACTION(packet.Action);
@@ -924,7 +887,7 @@ void WorldSession::HandleMoveUnRootAck(WorldPacket& recvData)
 
     MovementInfo movementInfo;
     movementInfo.guid = guid;
-    ReadMovementInfo(recvData, &movementInfo);
+    ValidateMovementInfo(recvData, &movementInfo);
     recvData.read_skip<float>();                           // unk2
 */
 }
@@ -949,7 +912,7 @@ void WorldSession::HandleMoveRootAck(WorldPacket& recvData)
     recvData.read_skip<uint32>();                          // unk
 
     MovementInfo movementInfo;
-    ReadMovementInfo(recvData, &movementInfo);
+    ValidateMovementInfo(recvData, &movementInfo);
 */
 }
 
@@ -965,7 +928,7 @@ void WorldSession::HandleSetActionBarToggles(WorldPackets::Character::SetActionB
     GetPlayer()->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_ACTION_BAR_TOGGLES, packet.Mask);
 }
 
-void WorldSession::HandlePlayedTime(WorldPackets::Character::PlayedTimeClient& packet)
+void WorldSession::HandlePlayedTime(WorldPackets::Character::RequestPlayedTime& packet)
 {
     WorldPackets::Character::PlayedTime playedTime;
     playedTime.TotalTime = _player->GetTotalPlayedTime();
@@ -1008,7 +971,7 @@ void WorldSession::HandleWorldTeleportOpcode(WorldPacket& recvData)
         SendNotification(LANG_YOU_NOT_HAVE_PERMISSION);
 }
 
-void WorldSession::HandleWhoisOpcode(WorldPackets::Who::WhoIsRequest& packet)
+void WorldSession::HandleWhoIsOpcode(WorldPackets::Who::WhoIsRequest& packet)
 {
     TC_LOG_DEBUG("network", "Received whois command from player %s for character %s",
         GetPlayer()->GetName().c_str(), packet.CharName.c_str());
@@ -1146,23 +1109,20 @@ void WorldSession::HandleFarSightOpcode(WorldPacket& recvData)
     GetPlayer()->UpdateVisibilityForPlayer();
 }
 
-void WorldSession::HandleSetTitleOpcode(WorldPacket& recvData)
+void WorldSession::HandleSetTitleOpcode(WorldPackets::Character::SetTitle& packet)
 {
     TC_LOG_DEBUG("network", "CMSG_SET_TITLE");
 
-    int32 title;
-    recvData >> title;
-
     // -1 at none
-    if (title > 0 && title < MAX_TITLE_INDEX)
+    if (packet.TitleID > 0 && packet.TitleID < MAX_TITLE_INDEX)
     {
-       if (!GetPlayer()->HasTitle(title))
+       if (!GetPlayer()->HasTitle(packet.TitleID))
             return;
     }
     else
-        title = 0;
+        packet.TitleID = 0;
 
-    GetPlayer()->SetUInt32Value(PLAYER_CHOSEN_TITLE, title);
+    GetPlayer()->SetUInt32Value(PLAYER_CHOSEN_TITLE, packet.TitleID);
 }
 
 void WorldSession::HandleTimeSyncResponse(WorldPackets::Misc::TimeSyncResponse& packet)
@@ -1380,13 +1340,13 @@ void WorldSession::HandleCancelMountAuraOpcode(WorldPacket& /*recvData*/)
     _player->RemoveAurasByType(SPELL_AURA_MOUNTED); // Calls Dismount()
 }
 
-void WorldSession::HandleMoveSetCanFlyAckOpcode(WorldPacket& recvData)
+void WorldSession::HandleMoveSetCanFlyAckOpcode(WorldPacket& /*recvData*/)
 {
     // fly mode on/off
     TC_LOG_DEBUG("network", "WORLD: CMSG_MOVE_SET_CAN_FLY_ACK");
 
     MovementInfo movementInfo;
-    _player->ReadMovementInfo(recvData, &movementInfo);
+    _player->ValidateMovementInfo(&movementInfo);
 
     _player->m_mover->m_movementInfo.flags = movementInfo.GetMovementFlags();
 }
@@ -1426,50 +1386,13 @@ void WorldSession::HandleUITimeRequest(WorldPackets::Misc::UITimeRequest& /*requ
 
 void WorldSession::SendSetPhaseShift(std::set<uint32> const& phaseIds, std::set<uint32> const& terrainswaps, std::set<uint32> const& worldMapAreaSwaps)
 {
-    ObjectGuid guid = _player->GetGUID();
-
-    WorldPacket data(SMSG_SET_PHASE_SHIFT_CHANGE, 1 + 8 + 4 + 4 + 4 + 4 + 2 * phaseIds.size() + 4 + terrainswaps.size() * 2);
-    data.WriteBit(guid[2]);
-    data.WriteBit(guid[3]);
-    data.WriteBit(guid[1]);
-    data.WriteBit(guid[6]);
-    data.WriteBit(guid[4]);
-    data.WriteBit(guid[5]);
-    data.WriteBit(guid[0]);
-    data.WriteBit(guid[7]);
-
-    data.WriteByteSeq(guid[7]);
-    data.WriteByteSeq(guid[4]);
-
-    data << uint32(worldMapAreaSwaps.size());
-    for (auto mapSwap : worldMapAreaSwaps)
-        data << uint16(mapSwap);                    // WorldMapArea.dbc id (controls map display)
-
-    data.WriteByteSeq(guid[1]);
-
-    data << uint32(phaseIds.size() ? 0 : 8);  // flags (not phasemask)
-
-    data.WriteByteSeq(guid[2]);
-    data.WriteByteSeq(guid[6]);
-
-    data << uint32(0);                          // Inactive terrain swaps
-    //for (uint8 i = 0; i < inactiveSwapsCount; ++i)
-    //    data << uint16(0);
-
-    data << uint32(phaseIds.size()) * 2;        // Phase.dbc ids
-    for (std::set<uint32>::const_iterator itr = phaseIds.begin(); itr != phaseIds.end(); ++itr)
-        data << uint16(*itr);
-
-    data.WriteByteSeq(guid[3]);
-    data.WriteByteSeq(guid[0]);
-
-    data << uint32(terrainswaps.size()) * 2;    // Active terrain swaps
-    for (std::set<uint32>::const_iterator itr = terrainswaps.begin(); itr != terrainswaps.end(); ++itr)
-        data << uint16(*itr);
-
-    data.WriteByteSeq(guid[5]);
-
-    SendPacket(&data);
+    WorldPackets::Misc::PhaseShift phaseShift;
+    phaseShift.ClientGUID = _player->GetGUID();
+    phaseShift.PersonalGUID = _player->GetGUID();
+    phaseShift.PhaseShifts = phaseIds;
+    phaseShift.VisibleMapIDs = terrainswaps;
+    phaseShift.UiWorldMapAreaIDSwaps = worldMapAreaSwaps;
+    SendPacket(phaseShift.Write());
 }
 
 // Battlefield and Battleground

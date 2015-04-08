@@ -33,7 +33,7 @@ namespace WorldPackets
         class BindPointUpdate final : public ServerPacket
         {
         public:
-            BindPointUpdate() : ServerPacket(SMSG_BINDPOINTUPDATE, 20) { }
+            BindPointUpdate() : ServerPacket(SMSG_BIND_POINT_UPDATE, 20) { }
 
             WorldPacket const* Write() override;
 
@@ -78,7 +78,7 @@ namespace WorldPackets
         class LoginSetTimeSpeed final : public ServerPacket
         {
         public:
-            LoginSetTimeSpeed() : ServerPacket(SMSG_LOGIN_SETTIMESPEED, 20) { }
+            LoginSetTimeSpeed() : ServerPacket(SMSG_LOGIN_SET_TIME_SPEED, 20) { }
 
             WorldPacket const* Write() override;
 
@@ -147,7 +147,7 @@ namespace WorldPackets
         class TimeSyncRequest final : public ServerPacket
         {
         public:
-            TimeSyncRequest() : ServerPacket(SMSG_TIME_SYNC_REQ, 4) { }
+            TimeSyncRequest() : ServerPacket(SMSG_TIME_SYNC_REQUEST, 4) { }
 
             WorldPacket const* Write() override;
 
@@ -219,7 +219,7 @@ namespace WorldPackets
         class TutorialSetFlag final : public ClientPacket
         {
         public:
-            TutorialSetFlag(WorldPacket&& packet) : ClientPacket(CMSG_TUTORIAL_FLAG, std::move(packet)) { }
+            TutorialSetFlag(WorldPacket&& packet) : ClientPacket(CMSG_TUTORIAL, std::move(packet)) { }
 
             void Read() override;
 
@@ -246,7 +246,7 @@ namespace WorldPackets
         class AreaTrigger final : public ClientPacket
         {
         public:
-            AreaTrigger(WorldPacket&& packet) : ClientPacket(CMSG_AREATRIGGER, std::move(packet)) { }
+            AreaTrigger(WorldPacket&& packet) : ClientPacket(CMSG_AREA_TRIGGER, std::move(packet)) { }
 
             void Read() override;
 
@@ -289,7 +289,7 @@ namespace WorldPackets
         class RaidDifficultySet final : public ServerPacket
         {
         public:
-            RaidDifficultySet() : ServerPacket(SMSG_SET_RAID_DIFFICULTY, 4 + 1) { }
+            RaidDifficultySet() : ServerPacket(SMSG_RAID_DIFFICULTY_SET, 4 + 1) { }
 
             WorldPacket const* Write() override;
 
@@ -321,7 +321,7 @@ namespace WorldPackets
         class PortGraveyard final : public ClientPacket
         {
         public:
-            PortGraveyard(WorldPacket&& packet) : ClientPacket(CMSG_PORT_GRAVEYARD, std::move(packet)) { }
+            PortGraveyard(WorldPacket&& packet) : ClientPacket(CMSG_CLIENT_PORT_GRAVEYARD, std::move(packet)) { }
 
             void Read() override { }
         };
@@ -483,7 +483,7 @@ namespace WorldPackets
         class LevelUpInfo final : public ServerPacket
         {
         public:
-            LevelUpInfo() : ServerPacket(SMSG_LEVELUP_INFO, 56) { }
+            LevelUpInfo() : ServerPacket(SMSG_LEVEL_UP_INFO, 56) { }
 
             WorldPacket const* Write() override;
 
@@ -503,6 +503,65 @@ namespace WorldPackets
             WorldPacket const* Write() override;
 
             uint32 SoundKitID = 0;
+        };
+
+        class RandomRollClient final : public ClientPacket
+        {
+        public:
+            RandomRollClient(WorldPacket&& packet) : ClientPacket(CMSG_RANDOM_ROLL, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 Min = 0;
+            int32 Max = 0;
+            uint8 PartyIndex = 0;
+        };
+
+        class RandomRoll final : public ServerPacket
+        {
+        public:
+            RandomRoll() : ServerPacket(SMSG_RANDOM_ROLL, 16 + 16 + 4 + 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid Roller;
+            ObjectGuid RollerWowAccount;
+            int32 Min = 0;
+            int32 Max = 0;
+            int32 Result = 0;
+        };
+
+        class EnableBarberShop final : public ServerPacket
+        {
+        public:
+            EnableBarberShop() : ServerPacket(SMSG_ENABLE_BARBER_SHOP, 0) { }
+
+            WorldPacket const* Write() override { return &_worldPacket; }
+        };
+
+        class PhaseShift final : public ServerPacket
+        {
+        public:
+            PhaseShift() : ServerPacket(SMSG_PHASE_SHIFT_CHANGE, 4) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid ClientGUID;
+            ObjectGuid PersonalGUID;
+            std::set<uint32> PhaseShifts;
+            std::set<uint32> PreloadMapIDs;
+            std::set<uint32> UiWorldMapAreaIDSwaps;
+            std::set<uint32> VisibleMapIDs;
+        };
+
+        class ZoneUnderAttack final : public ServerPacket
+        {
+        public:
+            ZoneUnderAttack() : ServerPacket(SMSG_ZONE_UNDER_ATTACK, 4) { }
+
+            WorldPacket const* Write() override;
+
+            int32 AreaID = 0;
         };
     }
 }
